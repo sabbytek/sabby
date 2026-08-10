@@ -38,8 +38,8 @@ export function createQueue<T>(name: string) {
 }
 
 // Typed worker factory
-export function createWorker<T>(name: string, processor: Processor<T>) {
-  return new Worker<T>(name, processor, {
+export function createWorker<T>(name: string, processor: Processor<T, void>) {
+  return new Worker<T, void>(name, processor, {
     connection: redisConnection,
     concurrency: 5,
   });
