@@ -70,8 +70,9 @@ const envSchema = z.object({
   AXIOM_TOKEN: z.string().optional(),
   AXIOM_DATASET: z.string().default('bpos-production'),
 
-  // Email (optional — invoice delivery via Resend; emails skipped when not set)
+  // Email (optional — invoice delivery; emails skipped when not set)
   RESEND_API_KEY: z.string().optional(),
+  BREVO_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().email().optional(),
 });
 
