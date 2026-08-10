@@ -1,0 +1,1095 @@
+{
+  "info": {
+    "name": "BPOS API",
+    "description": "Multi-tenant commerce and operations platform for Nigerian SMEs\n\n## Authentication\nAll protected endpoints require a Bearer token in the Authorization header.\n\n1. POST `/v1/auth/login` with email + password to get `accessToken` and `refreshToken`\n2. Use `{{accessToken}}` variable in the `Authorization: Bearer {{accessToken}}` header\n3. When token expires, POST `/v1/auth/refresh` with the refresh token to get a new pair\n\n## Multi-Tenancy\nEvery authenticated request is scoped to the tenant embedded in the JWT. No `X-Tenant-ID` header is needed.\n\n## Monetary Values\nAll monetary values are stored and returned as **integer kobo** (₦1 = 100 kobo). Divide by 100 to convert to Naira.\n\n## Error Envelope\n```json\n{\n  \"success\": false,\n  \"error\": {\n    \"code\": \"VALIDATION_ERROR\",\n    \"message\": \"'from' must be before 'to'\",\n    \"details\": []\n  }\n}\n```\n\n## Feature Flags\nSome endpoints are gated by subscription tier. A `402` response with `FEATURE_GATED` code means the merchant's plan does not include the feature.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health",
+            "description": "Returns service status, timestamp, and environment. Unauthenticated."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/auth/login",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"merchant@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "description": "Authenticate and receive JWT access + refresh tokens. Rate limited: 10 requests per minute."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "if (res.success) {",
+                  "  pm.collectionVariables.set('accessToken', res.data.accessToken);",
+                  "  pm.collectionVariables.set('refreshToken', res.data.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/auth/refresh",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "description": "Exchange a refresh token for a new access + refresh token pair. Rate limited: 10 requests per minute."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "if (res.success) {",
+                  "  pm.collectionVariables.set('accessToken', res.data.accessToken);",
+                  "  pm.collectionVariables.set('refreshToken', res.data.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/auth/logout",
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+            },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "description": "Revoke the refresh token. The user must log in again after this."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/auth/me",
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+            },
+            "description": "Returns the authenticated user's profile including role, tenantId, and locationId."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Tenants",
+      "item": [
+        {
+          "name": "Provision Tenant",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/tenants",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"businessName\": \"Adaeze Beauty Store\",\n  \"ownerEmail\": \"adaeze@example.com\",\n  \"ownerPassword\": \"securePassword123\",\n  \"ownerFirstName\": \"Adaeze\",\n  "ownerLastName\": \"Okoro\"\n}"
+            },
+            "description": "Provision a new merchant tenant. Creates the tenant schema, owner user, and starter plan subscription. Unauthenticated."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "Create Category",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/products/categories",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Hair Care\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Categories",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/products/categories",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Product",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/products",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Coconut Oil Shampoo\",\n  \"description\": \"Natural coconut oil shampoo for all hair types\",\n  \"categoryId\": 1,\n  \"variants\": [\n    {\n      \"sku\": \"COS-250ML\",\n      \"name\": \"250ml\",\n      \"priceKobo\": 350000,\n      \"costKobo\": 150000,\n      \"taxRateBps\": 750,\n      \"attributes\": { \"volume\": \"250ml\" }\n    },\n    {\n      \"sku\": \"COS-500ML\",\n      \"name\": \"500ml\",\n      \"priceKobo\": 600000,\n      \"costKobo\": 250000,\n      \"taxRateBps\": 750,\n      \"attributes\": { \"volume\": \"500ml\" }\n    }\n  ]\n}"
+            },
+            "description": "Create a product with optional variants. All prices in kobo."
+          },
+          "response": []
+        },
+        {
+          "name": "List Products",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/v1/products?page=1&limit=20", "host": ["{{baseUrl}}"], "path": ["v1", "products"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }] },
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Product",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/products/1",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Product",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/v1/products/1",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Coconut Oil Shampoo (Updated)\",\n  \"description\": \"Premium natural coconut oil shampoo\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Variant",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/products/1/variants",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"COS-1L\",\n  \"name\": \"1L\",\n  \"priceKobo\": 1000000,\n  \"costKobo\": 400000,\n  \"taxRateBps\": 750,\n  \"attributes\": { \"volume\": \"1L\" }\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Variant",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/v1/products/1/variants/1",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"priceKobo\": 375000\n}"
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Inventory",
+      "item": [
+        {
+          "name": "List Inventory Levels",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/inventory?page=1&limit=20",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Receive Stock",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/inventory/receive",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"variantId\": 1,\n  \"locationId\": 1,\n  \"quantity\": 50,\n  \"reference\": \"PO-2026-001\",\n  \"notes\": \"Initial stock receipt\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Adjust Stock",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/inventory/adjust",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"variantId\": 1,\n  \"locationId\": 1,\n  \"quantity\": -5,\n  \"reason\": \"Damaged in transit\",\n  \"reference\": \"ADJ-2026-001\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Stock Movements",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/inventory/movements?page=1&limit=50",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "List Low Stock Variants",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/inventory/low-stock",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Customers",
+      "item": [
+        {
+          "name": "Create Customer",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/customers",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Ngozi\",\n  \"lastName\": \"Adeyemi\",\n  \"email\": \"ngozi@example.com\",\n  \"phone\": \"+2348012345678\",\n  \"consentGivenAt\": \"2026-07-23T10:00:00.000Z\",\n  \"consentSource\": \"pos_checkout\"\n}"
+            },
+            "description": "Create a customer. NDPR consent fields are required."
+          },
+          "response": []
+        },
+        {
+          "name": "List Customers",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/customers?page=1&limit=20&search=ngozi",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Customer",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/customers/1",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Customer",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/v1/customers/1",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+2348098765432\"\n}"
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "Create Order",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/orders",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"pos\",\n  \"customerId\": 1,\n  \"items\": [\n    {\n      \"variantId\": 1,\n      \"quantity\": 2,\n      \"unitPriceKobo\": 350000\n    }\n  ],\n  \"discountKobo\": 0,\n  \"deliveryFeeKobo\": 0,\n  \"notes\": \"Walk-in customer\"\n}"
+            },
+            "description": "Create a draft order. Channel: website | pos | whatsapp | manual."
+          },
+          "response": []
+        },
+        {
+          "name": "List Orders",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/orders?page=1&limit=20&status=confirmed",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Order",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/orders/1",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Confirm Order",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/orders/1/confirm",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "description": "Validates order and deducts stock. Order must be in 'draft' status."
+          },
+          "response": []
+        },
+        {
+          "name": "Process Order",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/orders/1/process",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Fulfil Order",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/orders/1/fulfil",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Order",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/orders/1/cancel",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Customer changed mind\"\n}"
+            },
+            "description": "Cancels order and restores stock if previously confirmed."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "Initiate Payment",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/payments/initiate",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": 1,\n  \"gateway\": \"paystack\"\n}"
+            },
+            "description": "Initiate a payment via Paystack or Flutterwave. Returns an authorization URL for redirect."
+          },
+          "response": []
+        },
+        {
+          "name": "Paystack Webhook (Simulate)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/payments/webhook/paystack",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-paystack-signature", "value": "{{paystackSignature}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"charge.success\",\n  \"data\": {\n    \"reference\": \"BPOS-ORDER-1-abc123\",\n    \"amount\": 700000,\n    \"status\": \"success\",\n    \"gateway_response\": \"Successful\"\n  }\n}"
+            },
+            "description": "Paystack webhook receiver. In production, Paystack sends HMAC-SHA512 signed payloads here."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Ledger",
+      "item": [
+        {
+          "name": "List Accounts",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/ledger/accounts",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Balances",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/ledger/balances",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Wallet Balance",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/ledger/wallet",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "description": "Returns the cash account balance (platform wallet) in kobo."
+          },
+          "response": []
+        },
+        {
+          "name": "List Journal Entries",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/ledger/entries?page=1&limit=50",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Subscriptions",
+      "item": [
+        {
+          "name": "Get Current Subscription",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/subscriptions",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Initiate Subscription",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/subscriptions/initiate",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"planTier\": \"growth\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Subscription",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/subscriptions/cancel",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Locations",
+      "item": [
+        {
+          "name": "List Locations",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/locations",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Location",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/locations",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Lagos Main Store\",\n  \"address\": \"15 Broad Street, Lagos Island\",\n  \"city\": \"Lagos\",\n  \"state\": \"Lagos\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Location",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/locations/1",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Location",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/v1/locations/1",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Lagos Flagship Store\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate Location",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/v1/locations/1",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "description": "Soft-deletes (deactivates) a location. Does not delete historical data."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Staff",
+      "item": [
+        {
+          "name": "List Staff",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/staff",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Invite Staff",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/staff",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"chidi@example.com\",\n  \"firstName\": \"Chidi\",\n  \"lastName\": \"Obi\",\n  \"role\": \"staff\",\n  \"locationId\": 1\n}"
+            },
+            "description": "Invite a staff member. Owner can invite all roles; manager can invite staff/viewer only."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Staff Member",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/staff/1",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Staff",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/v1/staff/1",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"manager\",\n  \"locationId\": 2\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate Staff",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/v1/staff/1",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "description": "Soft-deactivates a staff member. They immediately lose access."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Expenses",
+      "item": [
+        {
+          "name": "Record Expense",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/expenses",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amountKobo\": 2500000,\n  \"category\": \"rent\",\n  \"description\": \"July shop rent - Broad Street\",\n  \"date\": \"2026-07-01\"\n}"
+            },
+            "description": "Record an expense. Automatically posts a ledger entry (debit expense account, credit cash)."
+          },
+          "response": []
+        },
+        {
+          "name": "List Expenses",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/expenses?page=1&limit=20&category=rent",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Expense",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/expenses/1",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Reporting",
+      "item": [
+        {
+          "name": "P&L Report",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/reports/pl?from=2026-01-01T00:00:00.000Z&to=2026-07-31T23:59:59.999Z",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "description": "Profit & Loss report derived from ledger journal entries.\n- Revenue = account 4000 credits\n- Expenses = accounts 5000/5100/5200/5300 debits\nRequires feature flag: reporting:pl"
+          },
+          "response": []
+        },
+        {
+          "name": "Export P&L as CSV",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/reports/pl/export?from=2026-01-01T00:00:00.000Z&to=2026-07-31T23:59:59.999Z",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "description": "Downloads the P&L report as a CSV file.\nContent-Type: text/csv\nContent-Disposition: attachment; filename=\"pl-2026-01-01-2026-07-31.csv\""
+          },
+          "response": []
+        },
+        {
+          "name": "Best Sellers",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/reports/best-sellers?from=2026-01-01T00:00:00.000Z&to=2026-07-31T23:59:59.999Z&limit=10",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Revenue by Location",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/reports/revenue-by-location?from=2026-01-01T00:00:00.000Z&to=2026-07-31T23:59:59.999Z",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "description": "Revenue breakdown by location. Requires feature flag: reporting:revenue_by_location"
+          },
+          "response": []
+        },
+        {
+          "name": "Staff Sales Report",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/reports/staff-sales?from=2026-01-01T00:00:00.000Z&to=2026-07-31T23:59:59.999Z",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "description": "Sales performance by staff member. Requires feature flag: reporting:staff_sales"
+          },
+          "response": []
+        },
+        {
+          "name": "Export Staff Sales as CSV",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/reports/staff-sales/export?from=2026-01-01T00:00:00.000Z&to=2026-07-31T23:59:59.999Z",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Inventory Valuation (JSON)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/reports/inventory-valuation?format=json",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "description": "Inventory valuation: quantity x cost per variant per location.\nRequires feature flag: reporting:margin (manager+ only)"
+          },
+          "response": []
+        },
+        {
+          "name": "Inventory Valuation (CSV)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/reports/inventory-valuation?format=csv",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Invoicing",
+      "item": [
+        {
+          "name": "Generate Invoice",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/invoices",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": 1\n}"
+            },
+            "description": "Generate an invoice for a confirmed order. PDF is generated asynchronously and stored in R2."
+          },
+          "response": []
+        },
+        {
+          "name": "List Invoices",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/invoices?page=1&limit=20",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Invoice",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/invoices/1",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "WhatsApp",
+      "item": [
+        {
+          "name": "Webhook Verification",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=YOUR_VERIFY_TOKEN&hub.challenge=CHALLENGE",
+            "description": "Meta webhook verification. Returns the challenge value if verify_token matches."
+          },
+          "response": []
+        },
+        {
+          "name": "Webhook Receiver",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/whatsapp/webhook",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"object\": \"whatsapp_business_account\",\n  \"entry\": [\n    {\n      \"changes\": [\n        {\n          \"value\": {\n            \"messages\": [\n              {\n                \"from\": \"2348012345678\",\n                \"type\": \"text\",\n                \"text\": { \"body\": \"Hi, I want to order\" }\n              }\n            ]\n          },\n          \"field\": \"messages\"\n        }\n      ]\n    }\n  ]\n}"
+            },
+            "description": "Inbound WhatsApp message receiver. Processes messages through the session state machine."
+          },
+          "response": []
+        },
+        {
+          "name": "Setup WhatsApp Number",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/whatsapp/setup",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumberId\": \"123456789\"\n}"
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Locations",
+      "item": [
+        {
+          "name": "List Locations",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/locations",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Onboarding",
+      "item": [
+        {
+          "name": "Get Setup Checklist",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/onboarding",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "description": "Returns the guided setup checklist showing completed and pending steps for this merchant."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Dispatch",
+      "item": [
+        {
+          "name": "Configure Logistics",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/dispatch/configure",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"traka\",\n  \"apiKey\": \"your-traka-api-key\",\n  \"apiSecret\": \"your-traka-api-secret\"\n}"
+            },
+            "description": "Configure logistics provider. Credentials are AES-256 encrypted at rest."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Logistics Config",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/dispatch/config",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Shipping Quote",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/dispatch/quote",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": 1,\n  \"destinationAddress\": \"20 Admiralty Way, Lekki Phase 1\",\n  \"destinationCity\": \"Lagos\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Dispatch Order",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/dispatch/1/dispatch",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "description": "Dispatch an order via the configured logistics provider. Merchant-triggered, not automatic."
+          },
+          "response": []
+        },
+        {
+          "name": "Track Order",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/dispatch/1/track",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Uploads",
+      "item": [
+        {
+          "name": "Upload Image",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/uploads/image",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "multipart/form-data" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "/path/to/image.jpg" }
+              ]
+            },
+            "description": "Upload and compress an image. Server-side compression via Sharp before storing in R2."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Shipping",
+      "item": [
+        {
+          "name": "List Nigerian States",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/shipping/states",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Shipping Zone",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/shipping/zones",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Lagos\",\n  \"states\": [\"Lagos\"]\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Shipping Zones",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/shipping/zones",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Shipping Method",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/shipping/methods",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Standard Delivery\",\n  \"type\": \"flat_rate\",\n  \"flatRateKobo\": 150000,\n  \"estimatedDays\": \"2-3 business days\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Shipping Methods",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/shipping/methods",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Available Shipping Methods",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/shipping/available?cartTotal=5000000&destinationState=Lagos",
+            "description": "Returns all applicable shipping methods with fees for a given checkout context, sorted cheapest first. Semi-public (works without auth, returns empty data if no tenant)."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Pickup Location",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/v1/shipping/pickup-locations",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"GIG Logistics Office\",\n  \"type\": \"third_party\",\n  \"address\": \"5 Toyin Street, Ikeja\",\n  \"city\": \"Lagos\",\n  \"state\": \"Lagos\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Pickup Locations",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/shipping/pickup-locations",
+            "description": "List active pickup locations. Semi-public (works without auth)."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

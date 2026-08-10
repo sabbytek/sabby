@@ -1,0 +1,4152 @@
+openapi: 3.0.3
+info:
+  title: BPOS API
+  description: |
+    Multi-tenant commerce and operations platform for Nigerian SMEs.
+
+    ## Authentication
+    All protected endpoints require a Bearer token in the Authorization header.
+    1. POST `/v1/auth/login` with email + password to get `accessToken` and `refreshToken`
+    2. Use `{{accessToken}}` variable in the `Authorization: Bearer {{accessToken}}` header
+    3. When token expires, POST `/v1/auth/refresh` with the refresh token to get a new pair
+
+    ## Multi-Tenancy
+    Every authenticated request is scoped to the tenant embedded in the JWT. No `X-Tenant-ID` header is needed.
+
+    ## Monetary Values
+    All monetary values are stored and returned as **integer kobo** (₦1 = 100 kobo). Divide by 100 to convert to Naira.
+
+    ## Error Envelope
+    ```json
+    {
+      "success": false,
+      "error": {
+        "code": "VALIDATION_ERROR",
+        "message": "'from' must be before 'to'",
+        "details": []
+      }
+    }
+    ```
+
+    ## Feature Flags
+    Some endpoints are gated by subscription tier. A `402` response with `FEATURE_GATED` code means the merchant's plan does not include the feature.
+  version: 1.0.0
+  contact:
+    name: BPOS Engineering
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:3000
+    description: Development
+  - url: https://staging-api.bpos.ng
+    description: Staging
+  - url: https://api.bpos.ng
+    description: Production
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token from POST /v1/auth/login
+
+  schemas:
+    # ─── Common Schemas ───────────────────────────────────────────────────────
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: object
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              description: Machine-readable error code
+              enum:
+                - NOT_FOUND
+                - UNAUTHORIZED
+                - FORBIDDEN
+                - FEATURE_GATED
+                - VALIDATION_ERROR
+                - CONFLICT
+                - EXTERNAL_SERVICE_ERROR
+                - LEDGER_IMBALANCE
+                - INTERNAL_ERROR
+            message:
+              type: string
+              description: Human-readable error message
+            details:
+              oneOf:
+                - type: array
+                  items: {}
+                - type: object
+              description: Additional error details (validation errors, etc.)
+
+    PaginationQuery:
+      type: object
+      properties:
+        page:
+          type: string
+          description: Page number (1-indexed)
+          default: '1'
+          pattern: '^[1-9]\d*$'
+        limit:
+          type: string
+          description: Items per page
+          default: '20'
+          pattern: '^[1-9]\d*$'
+
+    # ─── Auth Schemas ─────────────────────────────────────────────────────────
+    LoginBody:
+      type: object
+      required: [tenantSlug, email, password]
+      properties:
+        tenantSlug:
+          type: string
+          description: Unique tenant identifier
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+      additionalProperties: false
+
+    LoginResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                accessToken:
+                  type: string
+                  description: JWT access token (expires in 15 minutes)
+                refreshToken:
+                  type: string
+                  description: JWT refresh token (expires in 7 days)
+                user:
+                  $ref: '#/components/schemas/User'
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        firstName:
+          type: string
+        lastName:
+          type: string
+        role:
+          type: string
+          enum: [owner, manager, staff, viewer]
+        tenantId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          nullable: true
+          description: Scoped location (null = all locations for owner/manager)
+
+    RefreshBody:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+        tenantSlug:
+          type: string
+      additionalProperties: false
+
+    LogoutBody:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+      additionalProperties: false
+
+    # ─── Tenant Schemas ───────────────────────────────────────────────────────
+    TenantProvisionBody:
+      type: object
+      required: [businessName, ownerEmail, ownerPassword, ownerFirstName, ownerLastName]
+      properties:
+        businessName:
+          type: string
+          minLength: 2
+          maxLength: 100
+        ownerEmail:
+          type: string
+          format: email
+        ownerPassword:
+          type: string
+          minLength: 8
+        ownerFirstName:
+          type: string
+          minLength: 1
+        ownerLastName:
+          type: string
+          minLength: 1
+      additionalProperties: false
+
+    # ─── Product Schemas ──────────────────────────────────────────────────────
+    ProductVariant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        name:
+          type: string
+        priceKobo:
+          type: integer
+          description: Selling price in kobo
+        costKobo:
+          type: integer
+          description: Cost price in kobo (sensitive, manager+ only)
+        taxRateBps:
+          type: integer
+          description: Tax rate in basis points (750 = 7.5%)
+        attributes:
+          type: object
+          description: Flexible key-value attributes (e.g., volume, color)
+        weightKg:
+          type: number
+          nullable: true
+          description: Weight in kg for weight-based shipping
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        categoryId:
+          type: string
+          nullable: true
+        imageUrl:
+          type: string
+          nullable: true
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductVariant'
+        createdAt:
+          type: string
+          format: date-time
+
+    ProductCreateBody:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 2000
+        categoryId:
+          type: string
+        imageUrl:
+          type: string
+          format: uri
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductVariantCreateBody'
+      additionalProperties: false
+
+    ProductVariantCreateBody:
+      type: object
+      required: [sku, priceKobo, costKobo]
+      properties:
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 50
+        name:
+          type: string
+        priceKobo:
+          type: integer
+          minimum: 0
+        costKobo:
+          type: integer
+          minimum: 0
+        taxRateBps:
+          type: integer
+          minimum: 0
+          maximum: 10000
+          default: 0
+        attributes:
+          type: object
+        weightKg:
+          type: number
+          minimum: 0
+      additionalProperties: false
+
+    ProductUpdateBody:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 2000
+        categoryId:
+          type: string
+        imageUrl:
+          type: string
+          format: uri
+      additionalProperties: false
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        parentId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    CategoryCreateBody:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        parentId:
+          type: string
+      additionalProperties: false
+
+    # ─── Inventory Schemas ────────────────────────────────────────────────────
+    InventoryLevel:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        quantityOnHand:
+          type: integer
+        lowStockThreshold:
+          type: integer
+        variant:
+          type: object
+          properties:
+            sku:
+              type: string
+            name:
+              type: string
+            product:
+              type: object
+              properties:
+                name:
+                  type: string
+        location:
+          type: object
+          properties:
+            name:
+              type: string
+
+    StockMovement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [receive, sale, adjustment, return, transfer]
+        quantity:
+          type: integer
+          description: Positive = add, negative = remove
+        reference:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        createdBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+
+    ReceiveStockBody:
+      type: object
+      required: [variantId, locationId, quantity]
+      properties:
+        variantId:
+          type: string
+        locationId:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+        reference:
+          type: string
+          description: External reference (e.g., PO number)
+        notes:
+          type: string
+      additionalProperties: false
+
+    AdjustStockBody:
+      type: object
+      required: [variantId, locationId, quantity, reason]
+      properties:
+        variantId:
+          type: string
+        locationId:
+          type: string
+        quantity:
+          type: integer
+          description: Positive = add, negative = write-off
+        reason:
+          type: string
+          minLength: 3
+        reference:
+          type: string
+      additionalProperties: false
+
+    # ─── Customer Schemas ─────────────────────────────────────────────────────
+    Customer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        consentGivenAt:
+          type: string
+          format: date-time
+          nullable: true
+        consentSource:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    CustomerCreateBody:
+      type: object
+      required: [firstName, lastName]
+      properties:
+        firstName:
+          type: string
+          minLength: 1
+        lastName:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        consentGivenAt:
+          type: string
+          format: date-time
+          description: NDPR consent timestamp (required for new customers)
+        consentSource:
+          type: string
+          enum: [pos_checkout, website, whatsapp, manual]
+          description: NDPR consent source
+      additionalProperties: false
+
+    CustomerUpdateBody:
+      type: object
+      properties:
+        firstName:
+          type: string
+          minLength: 1
+        lastName:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+      additionalProperties: false
+
+    # ─── Order Schemas ────────────────────────────────────────────────────────
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        orderNumber:
+          type: string
+          description: Human-readable order number
+        status:
+          type: string
+          enum: [draft, confirmed, processing, fulfilled, cancelled, refunded]
+        channel:
+          type: string
+          enum: [website, pos, whatsapp, manual]
+        customerId:
+          type: string
+          nullable: true
+        locationId:
+          type: string
+          nullable: true
+        assignedTo:
+          type: string
+          nullable: true
+          description: Staff member ID who handled the order
+        subtotalKobo:
+          type: integer
+        discountKobo:
+          type: integer
+        taxKobo:
+          type: integer
+        deliveryFeeKobo:
+          type: integer
+        totalKobo:
+          type: integer
+        note:
+          type: string
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        createdAt:
+          type: string
+          format: date-time
+
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+        unitPriceKobo:
+          type: integer
+        discountKobo:
+          type: integer
+        taxKobo:
+          type: integer
+        totalKobo:
+          type: integer
+        variant:
+          type: object
+          properties:
+            sku:
+              type: string
+            name:
+              type: string
+            product:
+              type: object
+              properties:
+                name:
+                  type: string
+
+    OrderCreateBody:
+      type: object
+      required: [items]
+      properties:
+        customerId:
+          type: string
+        locationId:
+          type: string
+        assignedTo:
+          type: string
+          description: Staff member handling the order
+        channel:
+          type: string
+          enum: [website, pos, whatsapp, manual]
+          default: manual
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/OrderItemCreateBody'
+        discountKobo:
+          type: integer
+          minimum: 0
+          default: 0
+        taxKobo:
+          type: integer
+          minimum: 0
+          default: 0
+        deliveryFeeKobo:
+          type: integer
+          minimum: 0
+          default: 0
+        note:
+          type: string
+      additionalProperties: false
+
+    OrderItemCreateBody:
+      type: object
+      required: [variantId, quantity, unitPriceKobo]
+      properties:
+        variantId:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+        unitPriceKobo:
+          type: integer
+          minimum: 0
+        discountKobo:
+          type: integer
+          minimum: 0
+          default: 0
+        taxKobo:
+          type: integer
+          minimum: 0
+          default: 0
+      additionalProperties: false
+
+    OrderConfirmBody:
+      type: object
+      properties:
+        note:
+          type: string
+      additionalProperties: false
+
+    OrderCancelBody:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 3
+      additionalProperties: false
+
+    # ─── Payment Schemas ──────────────────────────────────────────────────────
+    PaymentInitiateBody:
+      type: object
+      required: [orderId, gateway]
+      properties:
+        orderId:
+          type: string
+        gateway:
+          type: string
+          enum: [paystack, flutterwave]
+        callbackUrl:
+          type: string
+          format: uri
+          description: Redirect URL after payment (optional)
+      additionalProperties: false
+
+    PaymentInitiateResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                authorizationUrl:
+                  type: string
+                  format: uri
+                  description: Redirect user to this URL to complete payment
+                reference:
+                  type: string
+                  description: Payment reference for tracking
+
+    # ─── Ledger Schemas ───────────────────────────────────────────────────────
+    LedgerAccount:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          description: Account code (e.g., 1000, 4000, 5000)
+        name:
+          type: string
+        type:
+          type: string
+          enum: [asset, liability, equity, revenue, expense]
+        description:
+          type: string
+          nullable: true
+
+    AccountBalance:
+      type: object
+      properties:
+        account:
+          $ref: '#/components/schemas/LedgerAccount'
+        debitTotal:
+          type: integer
+          description: Total debits in kobo
+        creditTotal:
+          type: integer
+          description: Total credits in kobo
+        balance:
+          type: integer
+          description: Net balance in kobo
+
+    JournalEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        reference:
+          type: string
+          description: External reference (e.g., ORDER-123)
+        description:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/JournalLine'
+        createdAt:
+          type: string
+          format: date-time
+
+    JournalLine:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        accountId:
+          type: string
+          format: uuid
+        debitKobo:
+          type: integer
+        creditKobo:
+          type: integer
+        account:
+          $ref: '#/components/schemas/LedgerAccount'
+
+    # ─── Subscription Schemas ─────────────────────────────────────────────────
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        planTier:
+          type: string
+          enum: [starter, growth, enterprise]
+        status:
+          type: string
+          enum: [trial, active, grace, lapsed]
+        currentPeriodStart:
+          type: string
+          format: date-time
+        currentPeriodEnd:
+          type: string
+          format: date-time
+        trialEndsAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    SubscriptionInitiateBody:
+      type: object
+      required: [planTier]
+      properties:
+        planTier:
+          type: string
+          enum: [growth, enterprise]
+          description: Cannot subscribe to starter (free tier)
+      additionalProperties: false
+
+    # ─── Location Schemas ─────────────────────────────────────────────────────
+    Location:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        address:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        state:
+          type: string
+          nullable: true
+        isDefault:
+          type: boolean
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    LocationCreateBody:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+      additionalProperties: false
+
+    LocationUpdateBody:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        isDefault:
+          type: boolean
+      additionalProperties: false
+
+    # ─── Staff Schemas ────────────────────────────────────────────────────────
+    StaffMember:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          properties:
+            locationId:
+              type: string
+              nullable: true
+            locationName:
+              type: string
+              nullable: true
+            isActive:
+              type: boolean
+            invitedAt:
+              type: string
+              format: date-time
+              nullable: true
+
+    StaffInviteBody:
+      type: object
+      required: [email, firstName, lastName, role]
+      properties:
+        email:
+          type: string
+          format: email
+        firstName:
+          type: string
+          minLength: 1
+        lastName:
+          type: string
+          minLength: 1
+        role:
+          type: string
+          enum: [manager, staff, viewer]
+          description: Owner can invite all; manager can invite staff/viewer only
+        locationId:
+          type: string
+          description: Optional location assignment
+      additionalProperties: false
+
+    StaffUpdateBody:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [manager, staff, viewer]
+        locationId:
+          type: string
+          nullable: true
+          description: null = all locations
+      additionalProperties: false
+
+    # ─── Expense Schemas ──────────────────────────────────────────────────────
+    Expense:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        amountKobo:
+          type: integer
+        category:
+          type: string
+          enum: [rent, utilities, salaries, marketing, supplies, transport, other]
+        description:
+          type: string
+        date:
+          type: string
+          format: date
+        receiptUrl:
+          type: string
+          nullable: true
+        journalEntryId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Linked ledger entry
+        createdAt:
+          type: string
+          format: date-time
+
+    ExpenseCreateBody:
+      type: object
+      required: [amountKobo, category, description, date]
+      properties:
+        amountKobo:
+          type: integer
+          minimum: 1
+        category:
+          type: string
+          enum: [rent, utilities, salaries, marketing, supplies, transport, other]
+        description:
+          type: string
+          minLength: 3
+          maxLength: 500
+        date:
+          type: string
+          format: date
+        receiptUrl:
+          type: string
+          format: uri
+      additionalProperties: false
+
+    # ─── Reporting Schemas ────────────────────────────────────────────────────
+    PLReport:
+      type: object
+      properties:
+        revenueKobo:
+          type: integer
+          description: Total revenue (account 4000 credits)
+        cogsKobo:
+          type: integer
+          description: Cost of goods sold
+        grossProfitKobo:
+          type: integer
+          description: Revenue minus COGS
+        operatingExpensesKobo:
+          type: integer
+          description: Operating expenses (accounts 5000/5100)
+        paymentFeesKobo:
+          type: integer
+          description: Payment gateway fees (account 5200)
+        refundsKobo:
+          type: integer
+          description: Refunds processed (account 5300)
+        netProfitKobo:
+          type: integer
+          description: Gross profit minus operating expenses
+
+    BestSeller:
+      type: object
+      properties:
+        variantId:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        productName:
+          type: string
+        variantName:
+          type: string
+        totalQuantity:
+          type: integer
+        totalRevenueKobo:
+          type: integer
+
+    RevenueByLocation:
+      type: object
+      properties:
+        locationId:
+          type: string
+          format: uuid
+        locationName:
+          type: string
+        orderCount:
+          type: integer
+        totalRevenueKobo:
+          type: integer
+
+    StaffSalesReport:
+      type: object
+      properties:
+        staffId:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        orderCount:
+          type: integer
+        totalRevenueKobo:
+          type: integer
+
+    InventoryValuationRow:
+      type: object
+      properties:
+        sku:
+          type: string
+        productName:
+          type: string
+        variantName:
+          type: string
+        locationName:
+          type: string
+          nullable: true
+          description: 'null = Unassigned'
+        quantityOnHand:
+          type: integer
+        unitCostKobo:
+          type: integer
+        totalValueKobo:
+          type: integer
+
+    # ─── Invoice Schemas ──────────────────────────────────────────────────────
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        invoiceNumber:
+          type: string
+        orderId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [draft, sent, paid, void]
+        totalKobo:
+          type: integer
+        pdfUrl:
+          type: string
+          nullable: true
+          description: Signed R2 URL (async generation)
+        createdAt:
+          type: string
+          format: date-time
+
+    InvoiceCreateBody:
+      type: object
+      required: [orderId]
+      properties:
+        orderId:
+          type: string
+      additionalProperties: false
+
+    # ─── Dispatch Schemas ─────────────────────────────────────────────────────
+    DispatchConfig:
+      type: object
+      properties:
+        provider:
+          type: string
+          enum: [traka, generic]
+        isActive:
+          type: boolean
+
+    DispatchQuoteBody:
+      type: object
+      required: [orderId, destinationAddress, destinationCity]
+      properties:
+        orderId:
+          type: string
+        destinationAddress:
+          type: string
+        destinationCity:
+          type: string
+      additionalProperties: false
+
+    DispatchQuoteResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                feeKobo:
+                  type: integer
+                estimatedDays:
+                  type: string
+                provider:
+                  type: string
+
+    DispatchConfigureBody:
+      type: object
+      required: [provider, apiKey, apiSecret]
+      properties:
+        provider:
+          type: string
+          enum: [traka, generic]
+        apiKey:
+          type: string
+          description: Will be AES-256 encrypted at rest
+        apiSecret:
+          type: string
+          description: Will be AES-256 encrypted at rest
+      additionalProperties: false
+
+    # ─── Shipping Schemas ─────────────────────────────────────────────────────
+    ShippingZone:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        states:
+          type: array
+          items:
+            type: string
+          description: Nigerian states in this zone
+        isDefault:
+          type: boolean
+          description: Catch-all fallback zone
+        createdAt:
+          type: string
+          format: date-time
+
+    ShippingZoneCreateBody:
+      type: object
+      required: [name, states]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        states:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          description: Valid Nigerian state names
+      additionalProperties: false
+
+    ShippingMethod:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+          enum: [flat_rate, zone_rate, value_rate, weight_rate, automated, free, pick_up]
+        flatRateKobo:
+          type: integer
+          nullable: true
+        estimatedDays:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    ShippingMethodCreateBody:
+      type: object
+      required: [name, type]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        type:
+          type: string
+          enum: [flat_rate, zone_rate, value_rate, weight_rate, automated, free, pick_up]
+        flatRateKobo:
+          type: integer
+          minimum: 0
+          description: Required for flat_rate type
+        estimatedDays:
+          type: string
+      additionalProperties: false
+
+    ShippingRate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        methodId:
+          type: string
+          format: uuid
+        zoneId:
+          type: string
+          format: uuid
+          nullable: true
+        minKobo:
+          type: integer
+          description: Minimum order value for this rate
+        maxKobo:
+          type: integer
+          nullable: true
+          description: Maximum order value (null = no limit)
+        minWeightKg:
+          type: number
+          description: Minimum weight for this rate
+        maxWeightKg:
+          type: number
+          nullable: true
+        feeKobo:
+          type: integer
+      additionalProperties: false
+
+    ShippingRateCreateBody:
+      type: object
+      required: [feeKobo]
+      properties:
+        zoneId:
+          type: string
+        minKobo:
+          type: integer
+          minimum: 0
+          default: 0
+        maxKobo:
+          type: integer
+          nullable: true
+        minWeightKg:
+          type: number
+          minimum: 0
+          default: 0
+        maxWeightKg:
+          type: number
+          nullable: true
+        feeKobo:
+          type: integer
+          minimum: 0
+      additionalProperties: false
+
+    FreeShippingCondition:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        methodId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [always, min_order_value, product, category, promo_code]
+        value:
+          type: string
+          nullable: true
+          description: Condition value (e.g., min order value in kobo, promo code)
+
+    FreeShippingConditionCreateBody:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [always, min_order_value, product, category, promo_code]
+        value:
+          type: string
+          description: Required except for 'always' type
+      additionalProperties: false
+
+    PickupLocation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+          enum: [branch, third_party]
+          description: branch = merchant location, third_party = GIG, DHL, etc.
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    PickupLocationCreateBody:
+      type: object
+      required: [name, type, address, city, state]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        type:
+          type: string
+          enum: [branch, third_party]
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+      additionalProperties: false
+
+    AvailableShippingMethod:
+      type: object
+      properties:
+        methodId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+        feeKobo:
+          type: integer
+        estimatedDays:
+          type: string
+          nullable: true
+
+    # ─── WhatsApp Schemas ─────────────────────────────────────────────────────
+    WhatsAppSetupBody:
+      type: object
+      required: [phoneNumberId]
+      properties:
+        phoneNumberId:
+          type: string
+          description: Meta WhatsApp Business phone number ID
+      additionalProperties: false
+
+    # ─── Upload Schemas ───────────────────────────────────────────────────────
+    UploadResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  description: Public URL of the uploaded image
+                key:
+                  type: string
+                  description: R2 storage key
+                width:
+                  type: integer
+                height:
+                  type: integer
+                size:
+                  type: integer
+                  description: File size in bytes
+
+    # ─── Onboarding Schemas ───────────────────────────────────────────────────
+    OnboardingChecklist:
+      type: object
+      properties:
+        steps:
+          type: array
+          items:
+            type: object
+            properties:
+              key:
+                type: string
+                enum: [business_profile, first_product, first_location, first_order, payment_setup, staff_invite]
+              label:
+                type: string
+              completed:
+                type: boolean
+        completionPercentage:
+          type: integer
+          minimum: 0
+          maximum: 100
+
+  responses:
+    BadRequest:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: VALIDATION_ERROR
+              message: "'from' must be before 'to'"
+
+    Unauthorized:
+      description: Authentication required or invalid token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: UNAUTHORIZED
+              message: Authentication required
+
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: FORBIDDEN
+              message: Insufficient permissions
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: NOT_FOUND
+              message: "Resource with id 'xxx' not found"
+
+    FeatureGated:
+      description: Feature not available on current plan
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: FEATURE_GATED
+              message: "Feature 'reporting:margin' is not available on your current plan"
+
+    RateLimited:
+      description: Too many requests
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: RATE_LIMITED
+              message: Rate limit exceeded
+
+tags:
+  - name: Auth
+    description: Authentication and session management
+  - name: Tenants
+    description: Tenant provisioning and management
+  - name: Products
+    description: Product catalogue and variants
+  - name: Categories
+    description: Product category management
+  - name: Inventory
+    description: Stock tracking and movement
+  - name: Customers
+    description: Customer records (NDPR-compliant)
+  - name: Orders
+    description: Order pipeline and state machine
+  - name: Payments
+    description: Payment processing and webhooks
+  - name: Ledger
+    description: Double-entry financial ledger
+  - name: Subscriptions
+    description: Plan subscriptions and feature gating
+  - name: Locations
+    description: Multi-location management
+  - name: Staff
+    description: Staff and role management
+  - name: Expenses
+    description: Expense tracking and ledger posting
+  - name: Reporting
+    description: P&L, revenue, and operational reports
+  - name: Invoicing
+    description: Invoice generation and PDF export
+  - name: WhatsApp
+    description: WhatsApp commerce channel
+  - name: Onboarding
+    description: Guided merchant setup
+  - name: Dispatch
+    description: Logistics and order dispatch
+  - name: Uploads
+    description: Image upload and compression
+  - name: Shipping
+    description: Shipping zones, rates, and methods
+
+paths:
+  # ─── Health ─────────────────────────────────────────────────────────────────
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      security: []
+      description: Returns service status, timestamp, and environment. Unauthenticated.
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+                  timestamp:
+                    type: string
+                    format: date-time
+                  environment:
+                    type: string
+
+  # ─── Auth ───────────────────────────────────────────────────────────────────
+  /v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Authenticate a user and receive tokens
+      security: []
+      description: Rate limited: 10 requests per minute.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginBody'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /v1/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Exchange a refresh token for new tokens
+      security: []
+      description: Rate limited: 10 requests per minute.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshBody'
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke a refresh token (logout)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutBody'
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /v1/auth/me:
+    get:
+      tags: [Auth]
+      summary: Get the authenticated user profile
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /v1/auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request a password reset email
+      security: []
+      description: Rate limited: 5 requests per 15 minutes. Always returns success to prevent email enumeration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, tenantSlug]
+              properties:
+                email:
+                  type: string
+                  format: email
+                tenantSlug:
+                  type: string
+      responses:
+        '200':
+          description: If the email exists, a reset link has been sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /v1/auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Reset password using token from email
+      security: []
+      description: Rate limited: 5 requests per 15 minutes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, newPassword]
+              properties:
+                token:
+                  type: string
+                newPassword:
+                  type: string
+                  minLength: 8
+      responses:
+        '200':
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  # ─── Tenants ────────────────────────────────────────────────────────────────
+  /v1/tenants:
+    post:
+      tags: [Tenants]
+      summary: Provision a new merchant tenant
+      security: []
+      description: Creates tenant schema, owner user, and starter plan subscription.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantProvisionBody'
+      responses:
+        '201':
+          description: Tenant provisioned successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          tenant:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                                format: uuid
+                              name:
+                                type: string
+                              slug:
+                                type: string
+                          user:
+                            $ref: '#/components/schemas/User'
+                          accessToken:
+                            type: string
+                          refreshToken:
+                            type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Tenant slug already exists
+
+  # ─── Products ───────────────────────────────────────────────────────────────
+  /v1/products:
+    post:
+      tags: [Products]
+      summary: Create a product
+      description: Creates a product with optional variants. All prices in kobo.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductCreateBody'
+      responses:
+        '201':
+          description: Product created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Product'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    get:
+      tags: [Products]
+      summary: List products (paginated)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: category
+          in: query
+          schema:
+            type: string
+          description: Filter by category ID
+      responses:
+        '200':
+          description: Paginated product list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Product'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /v1/products/{id}:
+    get:
+      tags: [Products]
+      summary: Get a product with its variants
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '200':
+          description: Product details
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Product'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Products]
+      summary: Update a product
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductUpdateBody'
+      responses:
+        '200':
+          description: Product updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Product'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/products/categories:
+    post:
+      tags: [Categories]
+      summary: Create a product category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryCreateBody'
+      responses:
+        '201':
+          description: Category created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Category'
+
+    get:
+      tags: [Categories]
+      summary: List all product categories
+      responses:
+        '200':
+          description: Category list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Category'
+
+  /v1/products/{id}/variants:
+    post:
+      tags: [Products]
+      summary: Add a variant to a product
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductVariantCreateBody'
+      responses:
+        '201':
+          description: Variant added
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ProductVariant'
+
+  /v1/products/{id}/variants/{vid}:
+    patch:
+      tags: [Products]
+      summary: Update a product variant
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+        - name: vid
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Variant ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductVariantCreateBody'
+      responses:
+        '200':
+          description: Variant updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ProductVariant'
+
+  # ─── Inventory ──────────────────────────────────────────────────────────────
+  /v1/inventory:
+    get:
+      tags: [Inventory]
+      summary: List inventory levels
+      description: Requires feature flag: inventory:track
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Inventory levels
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/InventoryLevel'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+        '402':
+          $ref: '#/components/responses/FeatureGated'
+
+  /v1/inventory/receive:
+    post:
+      tags: [Inventory]
+      summary: Receive stock into a location
+      description: Requires feature flag: inventory:track
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReceiveStockBody'
+      responses:
+        '201':
+          description: Stock received
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/StockMovement'
+        '402':
+          $ref: '#/components/responses/FeatureGated'
+
+  /v1/inventory/adjust:
+    post:
+      tags: [Inventory]
+      summary: Manually adjust stock
+      description: |
+        Positive quantity = add stock. Negative quantity = write-off.
+        Requires feature flag: inventory:track
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdjustStockBody'
+      responses:
+        '201':
+          description: Stock adjusted
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/StockMovement'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '402':
+          $ref: '#/components/responses/FeatureGated'
+
+  /v1/inventory/movements:
+    get:
+      tags: [Inventory]
+      summary: List stock movements (audit trail)
+      description: Requires feature flag: inventory:track
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: variantId
+          in: query
+          schema:
+            type: string
+          description: Filter by variant ID
+        - name: locationId
+          in: query
+          schema:
+            type: string
+          description: Filter by location ID
+      responses:
+        '200':
+          description: Stock movements
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/StockMovement'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+
+  /v1/inventory/low-stock:
+    get:
+      tags: [Inventory]
+      summary: List variants at or below low-stock threshold
+      description: Requires feature flag: inventory:alerts
+      responses:
+        '200':
+          description: Low stock variants
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/InventoryLevel'
+
+  # ─── Customers ──────────────────────────────────────────────────────────────
+  /v1/customers:
+    post:
+      tags: [Customers]
+      summary: Create a customer record
+      description: NDPR consent fields are required for new customers.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerCreateBody'
+      responses:
+        '201':
+          description: Customer created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Customer'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+    get:
+      tags: [Customers]
+      summary: List customers (paginated, searchable)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search by name, email, or phone
+      responses:
+        '200':
+          description: Customer list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Customer'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+
+  /v1/customers/{id}:
+    get:
+      tags: [Customers]
+      summary: Get a customer record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Customer ID
+      responses:
+        '200':
+          description: Customer details
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Customer'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Customers]
+      summary: Update a customer record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Customer ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerUpdateBody'
+      responses:
+        '200':
+          description: Customer updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Customer'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ─── Orders ─────────────────────────────────────────────────────────────────
+  /v1/orders:
+    post:
+      tags: [Orders]
+      summary: Create a draft order
+      description: |
+        Creates a draft order. Use POST /v1/orders/:id/confirm to validate and deduct stock.
+        Channel options: website, pos, whatsapp, manual.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCreateBody'
+      responses:
+        '201':
+          description: Order created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Order'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+    get:
+      tags: [Orders]
+      summary: List orders (paginated, filterable)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, confirmed, processing, fulfilled, cancelled, refunded]
+          description: Filter by order status
+        - name: channel
+          in: query
+          schema:
+            type: string
+            enum: [website, pos, whatsapp, manual]
+          description: Filter by order channel
+      responses:
+        '200':
+          description: Order list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Order'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+
+  /v1/orders/{id}:
+    get:
+      tags: [Orders]
+      summary: Get a single order with its line items
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Order ID
+      responses:
+        '200':
+          description: Order details
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Order'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/orders/{id}/confirm:
+    post:
+      tags: [Orders]
+      summary: Confirm an order
+      description: Validates order and deducts stock. Order must be in 'draft' status.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Order ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderConfirmBody'
+      responses:
+        '200':
+          description: Order confirmed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Order'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/orders/{id}/process:
+    post:
+      tags: [Orders]
+      summary: Move an order to processing
+      description: Order must be in 'confirmed' status.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Order ID
+      responses:
+        '200':
+          description: Order moved to processing
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Order'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /v1/orders/{id}/fulfil:
+    post:
+      tags: [Orders]
+      summary: Mark an order as fulfilled
+      description: Order must be in 'processing' status.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Order ID
+      responses:
+        '200':
+          description: Order fulfilled
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Order'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /v1/orders/{id}/cancel:
+    post:
+      tags: [Orders]
+      summary: Cancel an order
+      description: Cancels order and restores stock if previously confirmed.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Order ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCancelBody'
+      responses:
+        '200':
+          description: Order cancelled
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Order'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  # ─── Payments ───────────────────────────────────────────────────────────────
+  /v1/payments/initiate:
+    post:
+      tags: [Payments]
+      summary: Initiate a payment for an order
+      description: Initiates payment via Paystack or Flutterwave. Returns authorization URL for redirect.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentInitiateBody'
+      responses:
+        '200':
+          description: Payment initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentInitiateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /v1/payments/webhook/paystack:
+    post:
+      tags: [Payments]
+      summary: Paystack webhook receiver
+      security: []
+      description: |
+        Receives Paystack webhook events. Verified via HMAC-SHA512 signature in `x-paystack-signature` header.
+        Always returns 200 to Paystack (per their requirements).
+      parameters:
+        - name: x-paystack-signature
+          in: header
+          required: true
+          schema:
+            type: string
+          description: HMAC-SHA512 signature of the request body
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Paystack webhook event payload
+      responses:
+        '200':
+          description: Webhook received
+
+  /v1/payments/webhook/flutterwave:
+    post:
+      tags: [Payments]
+      summary: Flutterwave webhook receiver
+      security: []
+      description: |
+        Receives Flutterwave webhook events. Verified via `verif-hash` header.
+        Always returns 200 to Flutterwave.
+      parameters:
+        - name: verif-hash
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Flutterwave verification hash
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Flutterwave webhook event payload
+      responses:
+        '200':
+          description: Webhook received
+
+  # ─── Ledger ─────────────────────────────────────────────────────────────────
+  /v1/ledger/accounts:
+    get:
+      tags: [Ledger]
+      summary: List chart of accounts
+      responses:
+        '200':
+          description: Chart of accounts
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/LedgerAccount'
+
+  /v1/ledger/balances:
+    get:
+      tags: [Ledger]
+      summary: Get account balances
+      description: Returns debit/credit totals and net balance for each account.
+      responses:
+        '200':
+          description: Account balances
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AccountBalance'
+
+  /v1/ledger/wallet:
+    get:
+      tags: [Ledger]
+      summary: Get platform wallet balance
+      description: Returns the cash account balance (platform wallet) in kobo.
+      responses:
+        '200':
+          description: Wallet balance
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          balanceKobo:
+                            type: integer
+                          accountCode:
+                            type: string
+
+  /v1/ledger/entries:
+    get:
+      tags: [Ledger]
+      summary: List journal entries
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Journal entries
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/JournalEntry'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+
+  # ─── Subscriptions ──────────────────────────────────────────────────────────
+  /v1/subscriptions:
+    get:
+      tags: [Subscriptions]
+      summary: Get current subscription status
+      responses:
+        '200':
+          description: Current subscription
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Subscription'
+
+  /v1/subscriptions/initiate:
+    post:
+      tags: [Subscriptions]
+      summary: Initiate a subscription payment
+      description: Initiates subscription payment via Paystack. Returns authorization URL.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionInitiateBody'
+      responses:
+        '200':
+          description: Payment initiated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          authorizationUrl:
+                            type: string
+                            format: uri
+                          reference:
+                            type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /v1/subscriptions/cancel:
+    post:
+      tags: [Subscriptions]
+      summary: Cancel the active subscription
+      responses:
+        '200':
+          description: Subscription cancelled
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Subscription'
+
+  # ─── Locations ──────────────────────────────────────────────────────────────
+  /v1/locations:
+    get:
+      tags: [Locations]
+      summary: List all locations
+      responses:
+        '200':
+          description: Location list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Location'
+
+    post:
+      tags: [Locations]
+      summary: Create a location
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocationCreateBody'
+      responses:
+        '201':
+          description: Location created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Location'
+
+  /v1/locations/{id}:
+    get:
+      tags: [Locations]
+      summary: Get a location
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Location ID
+      responses:
+        '200':
+          description: Location details
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Location'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Locations]
+      summary: Update a location
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Location ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocationUpdateBody'
+      responses:
+        '200':
+          description: Location updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Location'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Locations]
+      summary: Deactivate a location
+      description: Soft-deletes (deactivates) a location. Does not delete historical data.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Location ID
+      responses:
+        '200':
+          description: Location deactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ─── Staff ──────────────────────────────────────────────────────────────────
+  /v1/staff:
+    get:
+      tags: [Staff]
+      summary: List all staff members
+      responses:
+        '200':
+          description: Staff list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/StaffMember'
+
+    post:
+      tags: [Staff]
+      summary: Invite a staff member
+      description: |
+        Owner can invite all roles; manager can invite staff/viewer only.
+        Deactivated users are rejected at JWT validation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffInviteBody'
+      responses:
+        '201':
+          description: Staff invited
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/StaffMember'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /v1/staff/{id}:
+    get:
+      tags: [Staff]
+      summary: Get a staff member
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Staff member ID
+      responses:
+        '200':
+          description: Staff details
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/StaffMember'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Staff]
+      summary: Update a staff member
+      description: Owner can change any role; manager can only update staff/viewer.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Staff member ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffUpdateBody'
+      responses:
+        '200':
+          description: Staff updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/StaffMember'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    delete:
+      tags: [Staff]
+      summary: Deactivate a staff member
+      description: Soft-deactivates a staff member. They immediately lose access.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Staff member ID
+      responses:
+        '200':
+          description: Staff deactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ─── Expenses ───────────────────────────────────────────────────────────────
+  /v1/expenses:
+    post:
+      tags: [Expenses]
+      summary: Record an expense
+      description: Automatically posts a ledger entry (debit expense account, credit cash).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseCreateBody'
+      responses:
+        '201':
+          description: Expense recorded
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Expense'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+    get:
+      tags: [Expenses]
+      summary: List expenses (paginated)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [rent, utilities, salaries, marketing, supplies, transport, other]
+          description: Filter by expense category
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start date (inclusive)
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End date (inclusive)
+      responses:
+        '200':
+          description: Expense list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Expense'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+
+  /v1/expenses/{id}:
+    get:
+      tags: [Expenses]
+      summary: Get an expense record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Expense ID
+      responses:
+        '200':
+          description: Expense details
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Expense'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ─── Reporting ──────────────────────────────────────────────────────────────
+  /v1/reports/pl:
+    get:
+      tags: [Reporting]
+      summary: Profit & Loss report
+      description: |
+        All figures derived from journal entries for the period.
+        - Revenue = account 4000 credits
+        - Expenses = accounts 5000/5100/5200/5300 debits
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: Start date (inclusive)
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: End date (inclusive)
+      responses:
+        '200':
+          description: P&L report
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/PLReport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /v1/reports/pl/export:
+    get:
+      tags: [Reporting]
+      summary: Export P&L report as CSV
+      description: Downloads the P&L report as a CSV file.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: 'attachment; filename="pl-2026-01-01-2026-07-31.csv"'
+
+  /v1/reports/best-sellers:
+    get:
+      tags: [Reporting]
+      summary: Best-selling products by quantity sold
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: string
+            default: '10'
+          description: Max results to return
+      responses:
+        '200':
+          description: Best sellers
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/BestSeller'
+
+  /v1/reports/revenue-by-location:
+    get:
+      tags: [Reporting]
+      summary: Revenue breakdown by location
+      description: Requires feature flag: reporting:revenue_by_location
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Revenue by location
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/RevenueByLocation'
+        '402':
+          $ref: '#/components/responses/FeatureGated'
+
+  /v1/reports/staff-sales:
+    get:
+      tags: [Reporting]
+      summary: Sales performance by staff member
+      description: Requires feature flag: reporting:staff_sales
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Staff sales report
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/StaffSalesReport'
+        '402':
+          $ref: '#/components/responses/FeatureGated'
+
+  /v1/reports/staff-sales/export:
+    get:
+      tags: [Reporting]
+      summary: Export staff sales report as CSV
+      description: Downloads staff sales report as a CSV file.
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: 'attachment; filename="staff-sales.csv"'
+
+  /v1/reports/inventory-valuation:
+    get:
+      tags: [Reporting]
+      summary: Inventory valuation report
+      description: |
+        Returns quantity × cost per variant per location.
+        Requires feature flag: reporting:margin (manager+ only). Cost data is sensitive.
+      parameters:
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [json, csv]
+            default: json
+          description: Response format
+      responses:
+        '200':
+          description: Inventory valuation
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          rows:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/InventoryValuationRow'
+                          totalValueKobo:
+                            type: integer
+                            description: Total inventory value in kobo
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        '402':
+          $ref: '#/components/responses/FeatureGated'
+
+  # ─── Invoicing ──────────────────────────────────────────────────────────────
+  /v1/invoices:
+    post:
+      tags: [Invoicing]
+      summary: Generate an invoice for an order
+      description: Generates invoice for a confirmed order. PDF is generated asynchronously and stored in R2.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceCreateBody'
+      responses:
+        '201':
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Invoice'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+    get:
+      tags: [Invoicing]
+      summary: List invoices
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Invoice list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Invoice'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+
+  /v1/invoices/{id}:
+    get:
+      tags: [Invoicing]
+      summary: Get an invoice with order details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Invoice ID
+      responses:
+        '200':
+          description: Invoice details
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Invoice'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ─── WhatsApp ───────────────────────────────────────────────────────────────
+  /v1/whatsapp/webhook:
+    get:
+      tags: [WhatsApp]
+      summary: Meta webhook verification
+      security: []
+      description: |
+        Meta webhook verification endpoint. Returns the challenge value if verify_token matches.
+        Used during webhook setup in Meta Business Suite.
+      parameters:
+        - name: hub.mode
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [subscribe]
+        - name: hub.verify_token
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Must match WHATSAPP_VERIFY_TOKEN env var
+        - name: hub.challenge
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Returns the challenge value
+          content:
+            text/plain:
+              schema:
+                type: string
+        '403':
+          description: Invalid verify token
+
+    post:
+      tags: [WhatsApp]
+      summary: Receive WhatsApp events from Meta
+      security: []
+      description: |
+        Inbound WhatsApp message receiver. Processes messages through the session state machine:
+        idle → browsing → cart → checkout → awaiting_payment → complete
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Meta WhatsApp webhook event payload
+      responses:
+        '200':
+          description: Event received
+
+  /v1/whatsapp/setup:
+    post:
+      tags: [WhatsApp]
+      summary: Register a WhatsApp phone number ID
+      description: Associates a Meta WhatsApp Business phone number with this tenant.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WhatsAppSetupBody'
+      responses:
+        '200':
+          description: WhatsApp configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  # ─── Onboarding ─────────────────────────────────────────────────────────────
+  /v1/onboarding:
+    get:
+      tags: [Onboarding]
+      summary: Get guided setup checklist
+      description: Returns the guided setup checklist showing completed and pending steps for this merchant.
+      responses:
+        '200':
+          description: Onboarding checklist
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/OnboardingChecklist'
+
+  # ─── Dispatch ───────────────────────────────────────────────────────────────
+  /v1/dispatch/configure:
+    post:
+      tags: [Dispatch]
+      summary: Configure logistics provider
+      description: Configures logistics provider for this tenant. Credentials are AES-256 encrypted at rest.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DispatchConfigureBody'
+      responses:
+        '200':
+          description: Logistics configured
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/DispatchConfig'
+
+  /v1/dispatch/config:
+    get:
+      tags: [Dispatch]
+      summary: Get current logistics configuration
+      responses:
+        '200':
+          description: Logistics config
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/DispatchConfig'
+
+  /v1/dispatch/quote:
+    post:
+      tags: [Dispatch]
+      summary: Get a shipping fee quote
+      description: Gets a live shipping quote from the configured logistics provider before dispatch.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DispatchQuoteBody'
+      responses:
+        '200':
+          description: Shipping quote
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispatchQuoteResponse'
+
+  /v1/dispatch/{orderId}/dispatch:
+    post:
+      tags: [Dispatch]
+      summary: Dispatch an order
+      description: |
+        Dispatches an order via the configured logistics provider.
+        Merchant-triggered (not automatic on payment).
+        Order status automatically updates to "In Transit" when provider confirms pick-up.
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Order ID
+      responses:
+        '200':
+          description: Order dispatched
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          trackingNumber:
+                            type: string
+                          status:
+                            type: string
+
+  /v1/dispatch/{orderId}/track:
+    get:
+      tags: [Dispatch]
+      summary: Get live tracking status
+      description: Returns current tracking status from the logistics provider.
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Order ID
+      responses:
+        '200':
+          description: Tracking status
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                          location:
+                            type: string
+                            nullable: true
+                          estimatedDelivery:
+                            type: string
+                            format: date-time
+                            nullable: true
+                          events:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                timestamp:
+                                  type: string
+                                  format: date-time
+                                status:
+                                  type: string
+                                location:
+                                  type: string
+
+  /v1/dispatch/webhook/{provider}/{tenantId}:
+    post:
+      tags: [Dispatch]
+      summary: Inbound webhook from logistics provider
+      security: []
+      description: Receives tracking updates from logistics providers (TRAKA, generic).
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [traka, generic]
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Tenant UUID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Provider-specific webhook payload
+      responses:
+        '200':
+          description: Webhook received
+
+  # ─── Uploads ────────────────────────────────────────────────────────────────
+  /v1/uploads/image:
+    post:
+      tags: [Uploads]
+      summary: Upload and compress an image
+      description: |
+        Upload and compress an image (product photo, expense receipt, etc.).
+        Server-side compression via Sharp before storing in Cloudflare R2.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Image file (JPEG, PNG, WebP)
+      responses:
+        '200':
+          description: Image uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+
+  # ─── Shipping ───────────────────────────────────────────────────────────────
+  /v1/shipping/states:
+    get:
+      tags: [Shipping]
+      summary: List Nigerian states
+      description: Returns valid Nigerian state names for zone/rate configuration.
+      responses:
+        '200':
+          description: Nigerian states
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: string
+                        description: List of 36 Nigerian states + FCT
+
+  /v1/shipping/zones:
+    post:
+      tags: [Shipping]
+      summary: Create a shipping zone
+      description: Creates a named group of Nigerian states. Use for zone-based shipping rates.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShippingZoneCreateBody'
+      responses:
+        '201':
+          description: Zone created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ShippingZone'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+    get:
+      tags: [Shipping]
+      summary: List shipping zones
+      responses:
+        '200':
+          description: Zone list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ShippingZone'
+
+  /v1/shipping/zones/{id}:
+    patch:
+      tags: [Shipping]
+      summary: Update a shipping zone
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Zone ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShippingZoneCreateBody'
+      responses:
+        '200':
+          description: Zone updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ShippingZone'
+
+    delete:
+      tags: [Shipping]
+      summary: Delete a shipping zone
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Zone ID
+      responses:
+        '200':
+          description: Zone deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /v1/shipping/methods:
+    post:
+      tags: [Shipping]
+      summary: Create a shipping method
+      description: |
+        Creates a shipping method. Types:
+        - flat_rate: Fixed fee for all orders
+        - zone_rate: Different fees per shipping zone
+        - value_rate: Fees based on order value
+        - weight_rate: Fees based on package weight
+        - automated: Live quote from logistics provider
+        - free: Free shipping with optional conditions
+        - pick_up: Customer collects from a pickup location
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShippingMethodCreateBody'
+      responses:
+        '201':
+          description: Method created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ShippingMethod'
+
+    get:
+      tags: [Shipping]
+      summary: List all shipping methods
+      responses:
+        '200':
+          description: Method list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ShippingMethod'
+
+  /v1/shipping/methods/{id}:
+    patch:
+      tags: [Shipping]
+      summary: Update a shipping method
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Method ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShippingMethodCreateBody'
+      responses:
+        '200':
+          description: Method updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ShippingMethod'
+
+  /v1/shipping/methods/{id}/rates:
+    post:
+      tags: [Shipping]
+      summary: Add a rate row to a shipping method
+      description: Used for zone_rate, value_rate, and weight_rate methods.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Method ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShippingRateCreateBody'
+      responses:
+        '201':
+          description: Rate added
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ShippingRate'
+
+    get:
+      tags: [Shipping]
+      summary: List rate rows for a shipping method
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Method ID
+      responses:
+        '200':
+          description: Rate list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ShippingRate'
+
+  /v1/shipping/methods/{id}/rates/{rateId}:
+    delete:
+      tags: [Shipping]
+      summary: Remove a rate row from a shipping method
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Method ID
+        - name: rateId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Rate ID
+      responses:
+        '200':
+          description: Rate removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /v1/shipping/methods/{id}/conditions:
+    post:
+      tags: [Shipping]
+      summary: Add a condition to a free shipping method
+      description: |
+        Condition types:
+        - always: Free for all orders
+        - min_order_value: Free when order exceeds minimum
+        - product: Free for specific product
+        - category: Free for products in category
+        - promo_code: Free when promo code applied
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Method ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FreeShippingConditionCreateBody'
+      responses:
+        '201':
+          description: Condition added
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/FreeShippingCondition'
+
+    get:
+      tags: [Shipping]
+      summary: List conditions for a free shipping method
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Method ID
+      responses:
+        '200':
+          description: Condition list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/FreeShippingCondition'
+
+  /v1/shipping/methods/{id}/conditions/{conditionId}:
+    delete:
+      tags: [Shipping]
+      summary: Remove a condition from a free shipping method
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Method ID
+        - name: conditionId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Condition ID
+      responses:
+        '200':
+          description: Condition removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /v1/shipping/pickup-locations:
+    post:
+      tags: [Shipping]
+      summary: Create a pickup location
+      description: |
+        Creates a pickup location. Types:
+        - branch: Merchant's own location (references locations table)
+        - third_party: External collection point (GIG, DHL, etc.)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PickupLocationCreateBody'
+      responses:
+        '201':
+          description: Pickup location created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/PickupLocation'
+
+    get:
+      tags: [Shipping]
+      summary: List active pickup locations
+      description: Semi-public endpoint (works without auth, returns empty data if no tenant).
+      security: []
+      responses:
+        '200':
+          description: Pickup location list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PickupLocation'
+
+  /v1/shipping/pickup-locations/{id}:
+    patch:
+      tags: [Shipping]
+      summary: Update a pickup location
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Pickup location ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PickupLocationCreateBody'
+      responses:
+        '200':
+          description: Pickup location updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/PickupLocation'
+
+  /v1/shipping/available:
+    get:
+      tags: [Shipping]
+      summary: Get available shipping methods and fees
+      description: |
+        Returns all applicable shipping methods with fees for a given checkout context, sorted cheapest first.
+        Semi-public endpoint (works without auth, returns empty data if no tenant).
+      security: []
+      parameters:
+        - name: cartTotal
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Cart total in kobo
+        - name: destinationState
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Destination Nigerian state
+        - name: weightKg
+          in: query
+          schema:
+            type: string
+          description: Total weight in kg (for weight-based methods)
+      responses:
+        '200':
+          description: Available shipping methods
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AvailableShippingMethod'
+                        description: Sorted by fee (cheapest first)
+
+  # ─── Parameters ─────────────────────────────────────────────────────────────
+components:
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema:
+        type: string
+        default: '1'
+        pattern: '^[1-9]\d*$'
+      description: Page number (1-indexed)
+
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: string
+        default: '20'
+        pattern: '^[1-9]\d*$'
+      description: Items per page
+
+    ProductId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Product ID
+
+  # ─── Schemas (reusable) ────────────────────────────────────────────────────
+  # Pagination schema used in list responses
+  schemas:
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: Current page number
+        limit:
+          type: integer
+          description: Items per page
+        total:
+          type: integer
+          description: Total items matching query
+        totalPages:
+          type: integer
+          description: Total number of pages

@@ -1,0 +1,40 @@
+# Fly.io configuration — staging/development environment
+# Production runs on Hetzner VPS; Fly.io is for QA and frontend dev access
+
+app = "bpos-staging"
+primary_region = "ams"  # Amsterdam — closest to Nigeria with good latency
+
+[build]
+  dockerfile = "docker/Dockerfile"
+
+[env]
+  NODE_ENV = "staging"
+  PORT = "3000"
+  HOST = "0.0.0.0"
+  SWAGGER_ENABLED = "true"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 200
+    soft_limit = 150
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+[checks]
+  [checks.health]
+    grace_period = "30s"
+    interval = "15s"
+    method = "GET"
+    path = "/health"
+    port = 3000
+    timeout = "5s"
+    type = "http"

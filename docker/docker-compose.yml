@@ -1,0 +1,48 @@
+version: '3.9'
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    ports:
+      - '3000:3000'
+    environment:
+      - NODE_ENV=development
+    env_file:
+      - ../.env
+    volumes:
+      - ../src:/app/src:ro
+      - ../package.json:/app/package.json:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - bpos
+
+  redis:
+    image: redis:7.2-alpine
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - bpos
+
+volumes:
+  redis_data:
+
+networks:
+  bpos:
+    driver: bridge
