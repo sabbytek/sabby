@@ -4,9 +4,7 @@ import { env } from '../../config/env.js';
 let _client: Resend | null = null;
 
 function getResend(): Resend {
-  if (!_client) {
-    _client = new Resend(env.RESEND_API_KEY);
-  }
+  _client ??= new Resend(env.RESEND_API_KEY);
   return _client;
 }
 

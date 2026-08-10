@@ -25,8 +25,8 @@ export function getDb() {
  */
 export const db = new Proxy({} as ReturnType<typeof getDb>, {
   get(_target, prop) {
-    return Reflect.get(getDb(), prop) as unknown;
+    return Reflect.get(getDb(), prop);
   },
-});
+}) as ReturnType<typeof getDb>;
 
 export type PublicDb = ReturnType<typeof getDb>;
