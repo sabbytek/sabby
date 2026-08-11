@@ -20,7 +20,7 @@ export const inventoryWorker = createWorker<LowStockJobData>(
   async (job) => {
     const { tenantId, variantName, sku, quantityOnHand, threshold, locationId } = job.data;
 
-    job.log(
+    void job.log(
       `Low stock alert: tenant=${tenantId} sku=${sku} name="${variantName}" ` +
         `qty=${quantityOnHand} threshold=${threshold} location=${locationId}`,
     );

@@ -18,7 +18,7 @@ export const paymentsWorker = createWorker<FailedWebhookJobData>(
   QUEUES.PAYMENTS,
   async (job) => {
     const { tenantId, eventType, eventId, error, failedAt } = job.data;
-    job.log(
+    void job.log(
       `[DLQ] Failed webhook event — tenant=${tenantId} type=${eventType} eventId=${eventId} error="${error}" failedAt=${failedAt}`,
     );
 

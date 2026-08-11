@@ -5,13 +5,13 @@ import type { PaymentGateway, InitiatePaymentInput, InitiatePaymentResult, Verif
 const PAYSTACK_BASE = 'https://api.paystack.co';
 
 async function paystackRequest<T>(path: string, options?: RequestInit): Promise<T> {
+  const headers = new Headers(options?.headers);
+  headers.set('Authorization', `Bearer ${env.PAYSTACK_SECRET_KEY}`);
+  headers.set('Content-Type', 'application/json');
+
   const response = await fetch(`${PAYSTACK_BASE}${path}`, {
     ...options,
-    headers: {
-      Authorization: `Bearer ${env.PAYSTACK_SECRET_KEY}`,
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+    headers,
   });
 
   const json = (await response.json()) as { status: boolean; message: string; data: T };

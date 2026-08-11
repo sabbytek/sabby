@@ -5,16 +5,18 @@ import {
   adjustStock,
   listMovements,
   getLowStock,
+  getAvailability,
+  transferStock,
 } from './service.js';
 
-export async function list(
+export function list(
   ctx: RequestContext,
   query: { locationId?: string; variantId?: string },
-) {
+): Promise<unknown> {
   return listInventory(ctx.schema, query);
 }
 
-export async function receive(
+export function receive(
   ctx: RequestContext,
   input: {
     variantId: string;
@@ -22,11 +24,11 @@ export async function receive(
     quantity: number;
     note?: string;
   },
-) {
+): Promise<unknown> {
   return receiveStock(ctx.schema, ctx.userId, input);
 }
 
-export async function adjust(
+export function adjust(
   ctx: RequestContext,
   input: {
     variantId: string;
@@ -34,11 +36,11 @@ export async function adjust(
     quantity: number;
     note?: string;
   },
-) {
+): Promise<unknown> {
   return adjustStock(ctx.schema, ctx.userId, input);
 }
 
-export async function movements(
+export function movements(
   ctx: RequestContext,
   query: {
     variantId?: string;
@@ -47,7 +49,7 @@ export async function movements(
     page?: string;
     limit?: string;
   },
-) {
+): Promise<unknown> {
   return listMovements(ctx.schema, {
     ...(query.variantId && { variantId: query.variantId }),
     ...(query.from && { from: query.from }),
@@ -57,6 +59,26 @@ export async function movements(
   });
 }
 
-export async function lowStock(ctx: RequestContext, locationId?: string) {
+export function lowStock(ctx: RequestContext, locationId?: string): Promise<unknown> {
   return getLowStock(ctx.schema, locationId);
+}
+
+export function availability(
+  ctx: RequestContext,
+  query: { sku?: string; variantId?: string },
+): Promise<unknown> {
+  return getAvailability(ctx.schema, query);
+}
+
+export function transfer(
+  ctx: RequestContext,
+  input: {
+    variantId: string;
+    fromLocationId: string;
+    toLocationId: string;
+    quantity: number;
+    note?: string;
+  },
+): Promise<unknown> {
+  return transferStock(ctx.schema, ctx.userId, input);
 }
