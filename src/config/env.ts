@@ -6,7 +6,7 @@ const envSchema = z.object({
   HOST: z.string().default('0.0.0.0'),
 
   // Database
-  DATABASE_URL: z.string().url(),
+  DATABASE_URL: z.url(),
 
   // JWT
   JWT_ACCESS_SECRET: z.string().min(32),
@@ -17,12 +17,19 @@ const envSchema = z.object({
   // Redis
   REDIS_URL: z.string().default('redis://localhost:6379'),
 
+  // Upstash
+  UPSTASH_REDIS_URL: z.url(),
+  QSTASH_URL: z.url(),
+  QSTASH_TOKEN: z.string(),
+  QSTASH_CURRENT_SIGNING_KEY: z.string(),
+  QSTASH_NEXT_SIGNING_KEY: z.string(),
+
   // Cloudflare R2
   R2_ACCOUNT_ID: z.string(),
   R2_ACCESS_KEY_ID: z.string(),
   R2_SECRET_ACCESS_KEY: z.string(),
   R2_BUCKET_NAME: z.string(),
-  R2_PUBLIC_URL: z.string().url(),
+  R2_PUBLIC_URL: z.url(),
 
   // Paystack
   PAYSTACK_SECRET_KEY: z.string(),
@@ -51,7 +58,7 @@ const envSchema = z.object({
   PLATFORM_ENCRYPTION_KEY: z.string().min(64).optional(), // 32-byte hex = 64 hex chars
 
   // Platform
-  PLATFORM_BASE_URL: z.string().url().default('http://localhost:3000'),
+  PLATFORM_BASE_URL: z.url().default('http://localhost:3000'),
   CORS_ORIGINS: z.string().default('http://localhost:3001,http://localhost:3002'),
 
   // Feature flags
@@ -61,17 +68,18 @@ const envSchema = z.object({
   MAX_UPLOAD_SIZE_BYTES: z.coerce.number().int().positive().default(10 * 1024 * 1024), // 10MB raw cap pre-compression
 
   // Alerting (optional — Slack notifications for server errors)
-  SLACK_WEBHOOK_URL: z.string().url().optional(),
+  SLACK_WEBHOOK_URL: z.url().optional(),
 
   // Sentry (optional — exception tracking)
-  SENTRY_DSN: z.string().url().optional(),
+  SENTRY_DSN: z.url().optional(),
 
   // Axiom (optional — structured log drain)
   AXIOM_TOKEN: z.string().optional(),
   AXIOM_DATASET: z.string().default('bpos-production'),
 
-  // Email (optional — invoice delivery via Resend; emails skipped when not set)
+  // Email (optional — invoice delivery; emails skipped when not set)
   RESEND_API_KEY: z.string().optional(),
+  BREVO_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().email().optional(),
 });
 
