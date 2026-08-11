@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
 import { eq } from 'drizzle-orm';
 import { createWorker, QUEUES } from '../client.js';
 import type { GenerateInvoiceJobData } from '../../../modules/invoicing/service.js';

@@ -8,13 +8,13 @@ async function fwRequest<T>(path: string, options?: RequestInit): Promise<T> {
   const secretKey = env.FLUTTERWAVE_SECRET_KEY;
   if (!secretKey) throw new Error('Flutterwave is not configured');
 
+  const headers = new Headers(options?.headers);
+  headers.set('Authorization', `Bearer ${secretKey}`);
+  headers.set('Content-Type', 'application/json');
+
   const response = await fetch(`${FW_BASE}${path}`, {
     ...options,
-    headers: {
-      Authorization: `Bearer ${secretKey}`,
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+    headers,
   });
 
   const json = (await response.json()) as { status: string; message: string; data: T };

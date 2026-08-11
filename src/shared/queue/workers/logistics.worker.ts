@@ -69,7 +69,7 @@ export const logisticsWorker = createWorker<LogisticsJobData>(
     switch (name) {
       case 'notify-customer-dispatched': {
         const d = data as DispatchedJobData;
-        job.log(
+        void job.log(
           JSON.stringify({
             event: 'customer_dispatch_notification',
             tenantId: d.tenantId,
@@ -89,7 +89,7 @@ export const logisticsWorker = createWorker<LogisticsJobData>(
 
       case 'notify-customer-delivered': {
         const d = data as DeliveredJobData;
-        job.log(
+        void job.log(
           JSON.stringify({
             event: 'customer_delivery_notification',
             tenantId: d.tenantId,
@@ -108,7 +108,7 @@ export const logisticsWorker = createWorker<LogisticsJobData>(
 
       case 'notify-merchant-failed': {
         const d = data as FailedJobData;
-        job.log(
+        void job.log(
           JSON.stringify({
             event: 'merchant_dispatch_failure_alert',
             tenantId: d.tenantId,
@@ -127,7 +127,7 @@ export const logisticsWorker = createWorker<LogisticsJobData>(
       }
 
       default:
-        job.log(`Unknown logistics job: ${name}`);
+        void job.log(`Unknown logistics job: ${name}`);
     }
   },
 );
