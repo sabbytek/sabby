@@ -5,6 +5,8 @@ import {
   adjustStock,
   listMovements,
   getLowStock,
+  getAvailability,
+  transferStock,
 } from './service.js';
 
 export async function list(
@@ -59,4 +61,24 @@ export async function movements(
 
 export async function lowStock(ctx: RequestContext, locationId?: string) {
   return getLowStock(ctx.schema, locationId);
+}
+
+export async function availability(
+  ctx: RequestContext,
+  query: { sku?: string; variantId?: string },
+) {
+  return getAvailability(ctx.schema, query);
+}
+
+export async function transfer(
+  ctx: RequestContext,
+  input: {
+    variantId: string;
+    fromLocationId: string;
+    toLocationId: string;
+    quantity: number;
+    note?: string;
+  },
+) {
+  return transferStock(ctx.schema, ctx.userId, input);
 }

@@ -31,8 +31,25 @@ export const lowStockQuerySchema = z.object({
   locationId: z.string().optional(),
 });
 
+export const availabilityQuerySchema = z.object({
+  sku: z.string().optional(),
+  variantId: z.string().optional(),
+}).refine((data) => data.sku || data.variantId, {
+  message: 'Either sku or variantId is required',
+});
+
+export const transferStockBodySchema = z.object({
+  variantId: z.string(),
+  fromLocationId: z.string(),
+  toLocationId: z.string(),
+  quantity: z.number().int().min(1),
+  note: z.string().optional(),
+}).strict();
+
 export type ListInventoryQuery = z.infer<typeof listInventoryQuerySchema>;
 export type ReceiveStockBody = z.infer<typeof receiveStockBodySchema>;
 export type AdjustStockBody = z.infer<typeof adjustStockBodySchema>;
 export type MovementsQuery = z.infer<typeof movementsQuerySchema>;
 export type LowStockQuery = z.infer<typeof lowStockQuerySchema>;
+export type AvailabilityQuery = z.infer<typeof availabilityQuerySchema>;
+export type TransferStockBody = z.infer<typeof transferStockBodySchema>;

@@ -13,6 +13,8 @@ import {
   adjustStockBodySchema,
   movementsQuerySchema,
   lowStockQuerySchema,
+  availabilityQuerySchema,
+  transferStockBodySchema,
 } from './validators.js';
 
 const readGuard = [requireAuth, resolveTenant, requireFeature('inventory:track')];
@@ -89,5 +91,35 @@ export default async function inventoryRoutes(app: FastifyInstance) {
     const ctx = createContext(request);
     const data = await controller.lowStock(ctx, request.query.locationId);
     sendSuccess(reply, data);
+  });
+
+  typed.get('/availability', {
+    preHandler: readGuard,
+    schema: {
+      tags: ['Inventory'],
+      summary: 'Check stock availability across all locations for a SKU or variant',
+      description: 'Returns stock levels at each branch so staff can see where to source from or transfer stock.',
+      security: [{ bearerAuth: [] }],
+      querystring: availabilityQuerySchema,
+    },
+  }, async (request, reply) => {
+    const ctx = createContext(request);
+    const data = await controller.availability(ctx, request.query);
+    sendSuccess(reply, data);
+  });
+
+  typed.post('/transfer', {
+    preHandler: writeGuard,
+    schema: {
+      tags: ['Inventory'],
+      summary: 'Transfer stock between locations',
+      description: 'Moves inventory from one branch to another within the same tenant. Creates audit trail with paired stock movements.',
+      security: [{ bearerAuth: [] }],
+      body: transferStockBodySchema,
+    },
+  }, async (request, reply) => {
+    const ctx = createContext(request);
+    const data = await controller.transfer(ctx, request.body);
+    sendCreated(reply, data);
   });
 }
