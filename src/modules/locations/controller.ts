@@ -7,12 +7,14 @@ import {
   deactivateLocation,
 } from './service.js';
 
-export async function list(ctx: RequestContext) {
-  return listLocations(ctx.schema);
+export async function list(ctx: RequestContext): Promise<unknown> {
+  const result = await listLocations(ctx.schema);
+  return result;
 }
 
-export async function get(ctx: RequestContext, id: string) {
-  return getLocation(ctx.schema, id);
+export async function get(ctx: RequestContext, id: string): Promise<unknown> {
+  const result = await getLocation(ctx.schema, id);
+  return result;
 }
 
 export async function create(
@@ -23,8 +25,9 @@ export async function create(
     phone?: string;
     isDefault?: boolean;
   },
-) {
-  return createLocation(ctx.schema, input);
+): Promise<unknown> {
+  const result = await createLocation(ctx.schema, input);
+  return result;
 }
 
 export async function update(
@@ -37,10 +40,12 @@ export async function update(
     isDefault: boolean;
     isActive: boolean;
   }>,
-) {
-  return updateLocation(ctx.schema, id, input);
+): Promise<unknown> {
+  const result = await updateLocation(ctx.schema, id, input);
+  return result;
 }
 
-export async function deactivate(ctx: RequestContext, id: string) {
-  return deactivateLocation(ctx.schema, id);
+export async function deactivate(ctx: RequestContext, id: string): Promise<unknown> {
+  const result = await deactivateLocation(ctx.schema, id);
+  return result;
 }

@@ -8,12 +8,14 @@ import {
   deactivateStaffMember,
 } from './service.js';
 
-export async function list(ctx: RequestContext) {
-  return listStaff(ctx.schema);
+export async function list(ctx: RequestContext): Promise<unknown> {
+  const result = await listStaff(ctx.schema);
+  return result;
 }
 
-export async function get(ctx: RequestContext, id: string) {
-  return getStaffMember(ctx.schema, id);
+export async function get(ctx: RequestContext, id: string): Promise<unknown> {
+  const result = await getStaffMember(ctx.schema, id);
+  return result;
 }
 
 export async function invite(
@@ -27,8 +29,9 @@ export async function invite(
     locationId?: string;
     temporaryPassword: string;
   },
-) {
-  return inviteStaff(ctx.schema, input);
+): Promise<unknown> {
+  const result = await inviteStaff(ctx.schema, input);
+  return result;
 }
 
 export async function update(
@@ -42,10 +45,12 @@ export async function update(
     locationId: string | null;
     isActive: boolean;
   }>,
-) {
-  return updateStaffMember(ctx.schema, id, input);
+): Promise<unknown> {
+  const result = await updateStaffMember(ctx.schema, id, input);
+  return result;
 }
 
-export async function deactivate(ctx: RequestContext, id: string) {
-  return deactivateStaffMember(ctx.schema, id, ctx.userId);
+export async function deactivate(ctx: RequestContext, id: string): Promise<unknown> {
+  const result = await deactivateStaffMember(ctx.schema, id, ctx.userId);
+  return result;
 }

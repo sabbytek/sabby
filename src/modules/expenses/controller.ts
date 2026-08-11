@@ -11,8 +11,9 @@ export async function create(
     locationId?: string;
     receiptUrl?: string;
   },
-) {
-  return createExpense(ctx.schema, ctx.userId, input);
+): Promise<unknown> {
+  const result = await createExpense(ctx.schema, ctx.userId, input);
+  return result;
 }
 
 export async function list(
@@ -25,8 +26,8 @@ export async function list(
     from?: string;
     to?: string;
   },
-) {
-  return listExpenses(ctx.schema, {
+): Promise<unknown> {
+  const result = await listExpenses(ctx.schema, {
     ...(query.page && { page: parseInt(query.page) }),
     ...(query.limit && { limit: parseInt(query.limit) }),
     ...(query.category && { category: query.category }),
@@ -34,8 +35,10 @@ export async function list(
     ...(query.from && { from: query.from }),
     ...(query.to && { to: query.to }),
   });
+  return result;
 }
 
-export async function get(ctx: RequestContext, id: string) {
-  return getExpense(ctx.schema, id);
+export async function get(ctx: RequestContext, id: string): Promise<unknown> {
+  const result = await getExpense(ctx.schema, id);
+  return result;
 }

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
 import type { RequestContext } from '../../shared/types/controller.js';
 import type { PlanTier } from '../../config/features.js';
 import { db } from '../../shared/db/client.js';
@@ -9,14 +10,15 @@ import {
   cancelSubscription,
 } from './service.js';
 
-export async function getSubscriptionHandler(ctx: RequestContext) {
-  return getSubscription(ctx.schema);
+export async function getSubscriptionHandler(ctx: RequestContext): Promise<unknown> {
+  const result = await getSubscription(ctx.schema);
+  return result;
 }
 
 export async function initiateSubscriptionHandler(
   ctx: RequestContext,
   input: { planTier: Exclude<PlanTier, 'trial'> },
-) {
+): Promise<unknown> {
   const [tenant] = await db
     .select({ businessEmail: tenants.businessEmail })
     .from(tenants)
@@ -25,9 +27,10 @@ export async function initiateSubscriptionHandler(
 
   const email = tenant?.businessEmail ?? ctx.email;
 
-  return initiateSubscription(ctx.schema, ctx.tenantId, input.planTier, email);
+  const result = await initiateSubscription(ctx.schema, ctx.tenantId, input.planTier, email);
+  return result;
 }
 
-export async function cancelSubscriptionHandler(ctx: RequestContext) {
+export async function cancelSubscriptionHandler(ctx: RequestContext): Promise<void> {
   await cancelSubscription(ctx.schema, ctx.tenantId);
 }

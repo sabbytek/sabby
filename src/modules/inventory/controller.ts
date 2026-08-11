@@ -9,14 +9,15 @@ import {
   transferStock,
 } from './service.js';
 
-export function list(
+export async function list(
   ctx: RequestContext,
   query: { locationId?: string; variantId?: string },
 ): Promise<unknown> {
-  return listInventory(ctx.schema, query);
+  const result = await listInventory(ctx.schema, query);
+  return result;
 }
 
-export function receive(
+export async function receive(
   ctx: RequestContext,
   input: {
     variantId: string;
@@ -25,10 +26,11 @@ export function receive(
     note?: string;
   },
 ): Promise<unknown> {
-  return receiveStock(ctx.schema, ctx.userId, input);
+  const result = await receiveStock(ctx.schema, ctx.userId, input);
+  return result;
 }
 
-export function adjust(
+export async function adjust(
   ctx: RequestContext,
   input: {
     variantId: string;
@@ -37,10 +39,11 @@ export function adjust(
     note?: string;
   },
 ): Promise<unknown> {
-  return adjustStock(ctx.schema, ctx.userId, input);
+  const result = await adjustStock(ctx.schema, ctx.userId, input);
+  return result;
 }
 
-export function movements(
+export async function movements(
   ctx: RequestContext,
   query: {
     variantId?: string;
@@ -50,27 +53,30 @@ export function movements(
     limit?: string;
   },
 ): Promise<unknown> {
-  return listMovements(ctx.schema, {
+  const result = await listMovements(ctx.schema, {
     ...(query.variantId && { variantId: query.variantId }),
     ...(query.from && { from: query.from }),
     ...(query.to && { to: query.to }),
     ...(query.page && { page: parseInt(query.page) }),
     ...(query.limit && { limit: parseInt(query.limit) }),
   });
+  return result;
 }
 
-export function lowStock(ctx: RequestContext, locationId?: string): Promise<unknown> {
-  return getLowStock(ctx.schema, locationId);
+export async function lowStock(ctx: RequestContext, locationId?: string): Promise<unknown> {
+  const result = await getLowStock(ctx.schema, locationId);
+  return result;
 }
 
-export function availability(
+export async function availability(
   ctx: RequestContext,
   query: { sku?: string; variantId?: string },
 ): Promise<unknown> {
-  return getAvailability(ctx.schema, query);
+  const result = await getAvailability(ctx.schema, query);
+  return result;
 }
 
-export function transfer(
+export async function transfer(
   ctx: RequestContext,
   input: {
     variantId: string;
@@ -80,5 +86,6 @@ export function transfer(
     note?: string;
   },
 ): Promise<unknown> {
-  return transferStock(ctx.schema, ctx.userId, input);
+  const result = await transferStock(ctx.schema, ctx.userId, input);
+  return result;
 }

@@ -12,8 +12,9 @@ export interface InitiatePaymentInput {
   email: string;
 }
 
-export async function initiate(ctx: RequestContext, input: InitiatePaymentInput) {
-  return initiatePayment(ctx.schema, input.orderId, ctx.userId, input.email);
+export async function initiate(ctx: RequestContext, input: InitiatePaymentInput): Promise<unknown> {
+  const result = await initiatePayment(ctx.schema, input.orderId, ctx.userId, input.email);
+  return result;
 }
 
 /**
@@ -25,7 +26,7 @@ export async function handleWebhook(
   eventType: string,
   data: PaystackWebhookData,
   meta: Record<string, unknown>,
-) {
+): Promise<void> {
   if (meta['type'] === 'subscription') {
     // Import here to avoid circular dependency
     const { handleSubscriptionBillingWebhook } = await import(
