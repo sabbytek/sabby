@@ -41,7 +41,7 @@ async function swaggerPlugin(app: FastifyInstance) {
         { name: 'Auth', description: 'Authentication and session management' },
         { name: 'Tenants', description: 'Tenant provisioning and management' },
         { name: 'Products', description: 'Product catalogue and variants' },
-        { name: 'Inventory', description: 'Stock tracking and movement' },
+        { name: 'Inventory', description: 'Stock tracking, movement, cross-branch availability, and inter-location transfers' },
         { name: 'Customers', description: 'Customer records' },
         { name: 'Orders', description: 'Order pipeline' },
         { name: 'Payments', description: 'Payment processing and webhooks' },

@@ -15,12 +15,17 @@ import {
   lowStockQuerySchema,
   availabilityQuerySchema,
   transferStockBodySchema,
+  inventoryItemResponseSchema,
+  availabilityResponseSchema,
+  transferResponseSchema,
+  type ListInventoryQuery,
 } from './validators.js';
+import { successResponseSchema, createdResponseSchema } from '../../shared/http/schemas.js';
 
 const readGuard = [requireAuth, resolveTenant, requireFeature('inventory:track')];
 const writeGuard = [requireAuth, resolveTenant, requireManager, requireFeature('inventory:track')];
 
-export default async function inventoryRoutes(app: FastifyInstance) {
+export default function inventoryRoutes(app: FastifyInstance) {
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
   typed.get('/', {
@@ -33,7 +38,8 @@ export default async function inventoryRoutes(app: FastifyInstance) {
     },
   }, async (request, reply) => {
     const ctx = createContext(request);
-    const data = await controller.list(ctx, request.query);
+    const query = request.query as ListInventoryQuery;
+    const data = await controller.list(ctx, query) as unknown;
     sendSuccess(reply, data);
   });
 
@@ -97,10 +103,13 @@ export default async function inventoryRoutes(app: FastifyInstance) {
     preHandler: readGuard,
     schema: {
       tags: ['Inventory'],
-      summary: 'Check stock availability across all locations for a SKU or variant',
-      description: 'Returns stock levels at each branch so staff can see where to source from or transfer stock.',
+      summary: 'Check stock availability across all locations',
+      description: 'Returns stock levels at each branch so staff can see where to source from or transfer stock. Useful for multi-location businesses like pharmacy chains.',
       security: [{ bearerAuth: [] }],
       querystring: availabilityQuerySchema,
+      response: {
+        200: successResponseSchema(availabilityResponseSchema),
+      },
     },
   }, async (request, reply) => {
     const ctx = createContext(request);
@@ -113,9 +122,12 @@ export default async function inventoryRoutes(app: FastifyInstance) {
     schema: {
       tags: ['Inventory'],
       summary: 'Transfer stock between locations',
-      description: 'Moves inventory from one branch to another within the same tenant. Creates audit trail with paired stock movements.',
+      description: 'Moves inventory from one branch to another within the same tenant. Creates audit trail with paired stock movements (OUT at source, IN at destination).',
       security: [{ bearerAuth: [] }],
       body: transferStockBodySchema,
+      response: {
+        201: createdResponseSchema(transferResponseSchema),
+      },
     },
   }, async (request, reply) => {
     const ctx = createContext(request);
