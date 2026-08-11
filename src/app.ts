@@ -86,6 +86,22 @@ export function buildApp() {
 
   registerRequestId(app);
 
+  // Root route (unauthenticated, not in swagger)
+  // Returns app status + live DB/Redis/queue connection status
+  app.get('/', { schema: { hide: true } }, async (_request, reply) => {
+    const health = await runHealthChecks();
+    const statusCode = health.status === 'ok' ? 200 : health.status === 'degraded' ? 200 : 503;
+    return reply.status(statusCode).send({
+      app: 'BPOS API',
+      message: 'BPOS API is running',
+      status: health.status,
+      timestamp: health.timestamp,
+      environment: health.environment,
+      uptime: health.uptime,
+      checks: health.checks,
+    });
+  });
+
   // Health check (unauthenticated, not in swagger)
   // Returns DB + Redis + queue status with appropriate HTTP status code
   app.get('/health', { schema: { hide: true } }, async (_request, reply) => {
