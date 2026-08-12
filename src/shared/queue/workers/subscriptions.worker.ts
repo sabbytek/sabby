@@ -11,7 +11,7 @@ type SubscriptionJobName = 'grace-expire' | 'billing-retry';
 
 // 'grace-expire'  — fire when a grace period expires; moves status to lapsed
 // 'billing-retry' — fire after a failed recurring charge; enters grace if retries exhausted
-createWorker<SubscriptionJobData>(QUEUES.SUBSCRIPTIONS, async (job: Job<SubscriptionJobData>) => {
+export const subscriptionsWorker = createWorker<SubscriptionJobData>(QUEUES.SUBSCRIPTIONS, async (job: Job<SubscriptionJobData>) => {
   const { tenantId, schemaName } = job.data;
   const name = job.name as SubscriptionJobName;
 

@@ -88,7 +88,9 @@ export async function exportStaffSales(
   ]);
 }
 
-export async function getInventoryValuation(ctx: RequestContext): Promise<unknown> {
+export async function getInventoryValuation(
+  ctx: RequestContext,
+): Promise<service.InventoryValuationRow[]> {
   const result = await service.getInventoryValuation(ctx.schema);
   return result;
 }

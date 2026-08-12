@@ -10,6 +10,10 @@ primary_region = "lhr"  # London - closest to Nigeria
 [deploy]
   create_if_not_exists = true
 
+[processes]
+  app = "node dist/server.js"
+  worker = "node dist/queue/worker.js"
+
 [env]
   NODE_ENV = "staging"
   PORT = "3000"

@@ -82,6 +82,11 @@ export function buildApp() {
   void app.register(jwtPlugin, {
     secret: env.JWT_ACCESS_SECRET,
     sign: { expiresIn: env.JWT_ACCESS_EXPIRY },
+    formatUser: (payload) => ({
+      ...payload,
+      userId: payload.sub,
+      tenantId: payload.tid,
+    }),
   });
 
   registerRequestId(app);

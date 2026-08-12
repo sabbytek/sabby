@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from '@fastify/type-provider-zod';
-import { requireAuth } from '../../shared/middleware/auth.js';
+import { requireAuth, requireManager } from '../../shared/middleware/auth.js';
 import { resolveTenant } from '../../shared/middleware/tenant.js';
 import { requireFeature } from '../../shared/middleware/feature-gate.js';
 import { createContext } from '../../shared/http/context.js';
@@ -22,7 +22,7 @@ import {
   availableQuerySchema,
 } from './validators.js';
 
-const managerGuard = [requireAuth, resolveTenant];
+const managerGuard = [requireAuth, resolveTenant, requireManager];
 const shippingFeature = requireFeature('shipping:manage');
 
 export default async function shippingRoutes(app: FastifyInstance) {

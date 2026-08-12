@@ -83,10 +83,8 @@ export async function forgotPassword(input: ForgotPasswordInput, logger: { info:
   const result = await requestPasswordReset(tenant.id, tenant.schemaName, input.email);
 
   if (result) {
-    logger.info(
-      { token: result.rawToken, email: result.userEmail },
-      'Password reset token generated (dev only — would be sent via email in production)',
-    );
+    // TODO: Send reset email via Brevo/Resend with result.rawToken
+    logger.info({ email: result.userEmail }, 'Password reset requested');
   }
 
   return { message: 'If the email exists, a reset link has been sent' };

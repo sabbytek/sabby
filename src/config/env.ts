@@ -9,20 +9,26 @@ const envSchema = z.object({
   DATABASE_URL: z.url(),
 
   // JWT
-  JWT_ACCESS_SECRET: z.string().min(32),
-  JWT_REFRESH_SECRET: z.string().min(32),
+  JWT_ACCESS_SECRET: z.string().min(32).refine(
+    (val) => !val.startsWith('replace-with-'),
+    'JWT_ACCESS_SECRET cannot use placeholder value',
+  ),
+  JWT_REFRESH_SECRET: z.string().min(32).refine(
+    (val) => !val.startsWith('replace-with-'),
+    'JWT_REFRESH_SECRET cannot use placeholder value',
+  ),
   JWT_ACCESS_EXPIRY: z.string().default('15m'),
   JWT_REFRESH_EXPIRY: z.string().default('7d'),
 
   // Redis
   REDIS_URL: z.string().default('redis://localhost:6379'),
 
-  // Upstash
-  UPSTASH_REDIS_URL: z.url(),
-  QSTASH_URL: z.url(),
-  QSTASH_TOKEN: z.string(),
-  QSTASH_CURRENT_SIGNING_KEY: z.string(),
-  QSTASH_NEXT_SIGNING_KEY: z.string(),
+  // Upstash (optional — legacy QStash/Redis helpers removed; kept for future use)
+  UPSTASH_REDIS_URL: z.url().optional(),
+  QSTASH_URL: z.url().optional(),
+  QSTASH_TOKEN: z.string().optional(),
+  QSTASH_CURRENT_SIGNING_KEY: z.string().optional(),
+  QSTASH_NEXT_SIGNING_KEY: z.string().optional(),
 
   // Cloudflare R2
   R2_ACCOUNT_ID: z.string(),
