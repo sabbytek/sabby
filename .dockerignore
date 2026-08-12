@@ -1,0 +1,39 @@
+# Dependencies
+node_modules
+
+# Build artifacts
+dist
+*.tsbuildinfo
+
+# Git
+.git
+.gitignore
+
+# Environment files (secrets!)
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Test & coverage
+coverage
+test
+*.test.ts
+*.spec.ts
+
+# Documentation (not needed in image)
+docs
+*.md
+
+# CI/CD
+.github
+.fly
+
+# Misc
+.DS_Store
+Thumbs.db

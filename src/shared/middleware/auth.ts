@@ -10,6 +10,9 @@ import type { UserRole } from '../types/index.js';
 export async function requireAuth(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
   try {
     await request.jwtVerify();
+    // Populate convenience aliases from JWT payload
+    request.user.userId = request.user.sub;
+    request.user.tenantId = request.user.tid;
   } catch {
     throw new UnauthorizedError('Invalid or expired token');
   }

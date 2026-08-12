@@ -26,6 +26,36 @@ export interface ComponentCheck {
   message?: string;
 }
 
+// Bound every component check so /health and / can never hang indefinitely
+// (e.g. BullMQ commands buffer forever when Redis is unreachable).
+const CHECK_TIMEOUT_MS = 4000;
+
+async function withCheckTimeout<T>(label: string, promise: Promise<T>): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label} check timed out after ${CHECK_TIMEOUT_MS}ms`)),
+      CHECK_TIMEOUT_MS,
+    );
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function runCheck(label: string, check: () => Promise<ComponentCheck>): Promise<ComponentCheck> {
+  try {
+    return await withCheckTimeout(label, check());
+  } catch (err) {
+    return {
+      status: 'error',
+      message: err instanceof Error ? err.message : `${label} check timed out`,
+    };
+  }
+}
+
 /**
  * Check database connectivity by running a simple query.
  */
@@ -119,9 +149,9 @@ async function checkQueues(): Promise<ComponentCheck> {
  */
 export async function runHealthChecks(): Promise<HealthCheckResult> {
   const [database, redis, queues] = await Promise.all([
-    checkDatabase(),
-    checkRedis(),
-    checkQueues(),
+    runCheck('database', checkDatabase),
+    runCheck('redis', checkRedis),
+    runCheck('queues', checkQueues),
   ]);
 
   const checks = { database, redis, queues };

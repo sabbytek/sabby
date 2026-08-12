@@ -34,30 +34,37 @@ function parseOrderQuery(raw: OrderListQuery) {
   };
 }
 
-export async function create(ctx: RequestContext, input: CreateOrderInput) {
-  return createOrder(ctx.schema, ctx.userId, input);
+export async function create(ctx: RequestContext, input: CreateOrderInput): Promise<unknown> {
+  const result = await createOrder(ctx.schema, ctx.userId, input);
+  return result;
 }
 
-export async function list(ctx: RequestContext, query: OrderListQuery) {
-  return listOrders(ctx.schema, parseOrderQuery(query));
+export async function list(ctx: RequestContext, query: OrderListQuery): Promise<unknown> {
+  const result = await listOrders(ctx.schema, parseOrderQuery(query));
+  return result;
 }
 
-export async function get(ctx: RequestContext, orderId: string) {
-  return getOrder(ctx.schema, orderId);
+export async function get(ctx: RequestContext, orderId: string): Promise<unknown> {
+  const result = await getOrder(ctx.schema, orderId);
+  return result;
 }
 
-export async function confirm(ctx: RequestContext, orderId: string) {
-  return confirmOrder(ctx.schema, ctx.tenantId, orderId, ctx.userId);
+export async function confirm(ctx: RequestContext, orderId: string): Promise<unknown> {
+  const result = await confirmOrder(ctx.schema, ctx.tenantId, orderId, ctx.userId);
+  return result;
 }
 
-export async function process(ctx: RequestContext, orderId: string) {
-  return processOrder(ctx.schema, orderId);
+export async function process(ctx: RequestContext, orderId: string): Promise<unknown> {
+  const result = await processOrder(ctx.schema, orderId);
+  return result;
 }
 
-export async function fulfil(ctx: RequestContext, orderId: string) {
-  return fulfillOrder(ctx.schema, orderId);
+export async function fulfil(ctx: RequestContext, orderId: string): Promise<unknown> {
+  const result = await fulfillOrder(ctx.schema, orderId);
+  return result;
 }
 
-export async function cancel(ctx: RequestContext, orderId: string) {
-  return cancelOrder(ctx.schema, orderId, ctx.userId);
+export async function cancel(ctx: RequestContext, orderId: string): Promise<unknown> {
+  const result = await cancelOrder(ctx.schema, orderId, ctx.userId);
+  return result;
 }

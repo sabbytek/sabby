@@ -20,12 +20,14 @@ function sanitizeVariant(v: ProductVariant, hideMargin: boolean): Omit<ProductVa
 export async function createCategoryHandler(
   ctx: RequestContext,
   input: { name: string; parentId?: string },
-) {
-  return createCategory(ctx.schema, input);
+): Promise<unknown> {
+  const result = await createCategory(ctx.schema, input);
+  return result;
 }
 
-export async function listCategoriesHandler(ctx: RequestContext) {
-  return listCategories(ctx.schema);
+export async function listCategoriesHandler(ctx: RequestContext): Promise<unknown> {
+  const result = await listCategories(ctx.schema);
+  return result;
 }
 
 export async function createProductHandler(
@@ -36,8 +38,9 @@ export async function createProductHandler(
     categoryId?: string;
     imageUrl?: string;
   },
-) {
-  return createProduct(ctx.schema, input);
+): Promise<unknown> {
+  const result = await createProduct(ctx.schema, input);
+  return result;
 }
 
 export async function listProductsHandler(
@@ -49,17 +52,18 @@ export async function listProductsHandler(
     isActive?: string;
     search?: string;
   },
-) {
-  return listProducts(ctx.schema, {
+): Promise<unknown> {
+  const result = await listProducts(ctx.schema, {
     ...(query.page && { page: parseInt(query.page) }),
     ...(query.limit && { limit: parseInt(query.limit) }),
     ...(query.categoryId && { categoryId: query.categoryId }),
     ...(query.isActive !== undefined && { isActive: query.isActive === 'true' }),
     ...(query.search && { search: query.search }),
   });
+  return result;
 }
 
-export async function getProductHandler(ctx: RequestContext, id: string) {
+export async function getProductHandler(ctx: RequestContext, id: string): Promise<unknown> {
   const product = await getProduct(ctx.schema, id);
   const hideMargin = ctx.role === 'staff';
   return {
@@ -78,8 +82,9 @@ export async function updateProductHandler(
     imageUrl: string | null;
     isActive: boolean;
   }>,
-) {
-  return updateProduct(ctx.schema, id, input);
+): Promise<unknown> {
+  const result = await updateProduct(ctx.schema, id, input);
+  return result;
 }
 
 export async function createVariantHandler(
@@ -93,8 +98,9 @@ export async function createVariantHandler(
     taxRateBps?: number;
     attributes?: string;
   },
-) {
-  return createVariant(ctx.schema, productId, input);
+): Promise<unknown> {
+  const result = await createVariant(ctx.schema, productId, input);
+  return result;
 }
 
 export async function updateVariantHandler(
@@ -109,6 +115,7 @@ export async function updateVariantHandler(
     attributes: string | null;
     isActive: boolean;
   }>,
-) {
-  return updateVariant(ctx.schema, productId, variantId, input);
+): Promise<unknown> {
+  const result = await updateVariant(ctx.schema, productId, variantId, input);
+  return result;
 }

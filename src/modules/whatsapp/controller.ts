@@ -5,7 +5,10 @@ export interface SetupInput {
   phoneNumberId: string;
 }
 
-export async function setup(ctx: RequestContext, input: SetupInput) {
+export async function setup(
+  ctx: RequestContext,
+  input: SetupInput,
+): Promise<{ success: true; message: string }> {
   await registerPhoneIdTenant(input.phoneNumberId, ctx.tenantId, ctx.schema);
   return { success: true, message: 'Phone number ID registered' };
 }

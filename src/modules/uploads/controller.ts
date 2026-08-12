@@ -4,6 +4,7 @@ import { uploadImage } from './service.js';
 export async function upload(
   ctx: RequestContext,
   input: { buffer: Buffer; mimeType: string },
-) {
-  return uploadImage(ctx.schema, input);
+): Promise<unknown> {
+  const result = await uploadImage(ctx.schema, input);
+  return result;
 }

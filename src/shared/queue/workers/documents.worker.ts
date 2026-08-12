@@ -11,7 +11,7 @@ import { renderInvoicePdf } from '../../pdf/invoice.js';
 import { uploadToR2 } from '../../storage/r2.js';
 import { sendInvoiceEmail } from '../../email/resend.js';
 
-createWorker<GenerateInvoiceJobData>(QUEUES.DOCUMENTS, async (job) => {
+export const documentsWorker = createWorker<GenerateInvoiceJobData>(QUEUES.DOCUMENTS, async (job) => {
   if (job.name !== 'generate-invoice-pdf') return;
 
   const { tenantId, schemaName, invoiceId, orderId } = job.data;

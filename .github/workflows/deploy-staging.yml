@@ -29,8 +29,8 @@ jobs:
       - run: npm install -g newman
       - name: Run smoke tests
         run: |
-          newman run docs/postman-collection.json \
-            --environment docs/postman-env-staging.json \
+          newman run docs/BPOS-API.postman_collection.json \
+            --env-var "baseUrl=$STAGING_URL" \
             --reporters cli,junit \
             --reporter-junit-export newman-results.xml
         env:
