@@ -24,7 +24,7 @@ WORKDIR /app
 # Install runtime dependencies for native modules
 RUN apk add --no-cache libstdc++
 
-ENV NODE_ENV=staging
+ENV NODE_ENV=production
 
 COPY package*.json ./
 RUN npm ci --omit=dev

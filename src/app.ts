@@ -39,11 +39,13 @@ import uploadsRoutes from './modules/uploads/routes.js';
 import shippingRoutes from './modules/shipping/routes.js';
 
 export function buildApp() {
+  /* eslint-disable @typescript-eslint/no-unsafe-assignment */
   const axiomTransport = createAxiomLogger();
 
   const app = Fastify({
     logger: {
       level: env.NODE_ENV === 'test' ? 'silent' : 'info',
+      redact: ['req.headers.authorization', '*.password', '*.token', '*.secret', '*.apiKey'],
       ...(axiomTransport ? { transport: axiomTransport } : {}),
       ...(env.NODE_ENV === 'development' && !axiomTransport
         ? {
@@ -54,6 +56,7 @@ export function buildApp() {
           }
         : {}),
     },
+    /* eslint-enable @typescript-eslint/no-unsafe-assignment */
     requestIdHeader: 'x-request-id',
     requestIdLogLabel: 'requestId',
     trustProxy: true,
@@ -93,25 +96,22 @@ export function buildApp() {
 
   // Root route (unauthenticated, not in swagger)
   // Returns app status + live DB/Redis/queue connection status
+  // Root route: lightweight liveness check (no DB/Redis/queue probes)
   app.get('/', { schema: { hide: true } }, async (_request, reply) => {
-    const health = await runHealthChecks();
-    const statusCode = health.status === 'ok' ? 200 : health.status === 'degraded' ? 200 : 503;
-    return reply.status(statusCode).send({
-      app: 'BPOS API',
-      message: 'BPOS API is running',
-      status: health.status,
-      timestamp: health.timestamp,
-      environment: health.environment,
-      uptime: health.uptime,
-      checks: health.checks,
+    return reply.status(200).send({
+      app: 'Sabby API',
+      message: 'Sabby API is running',
+      timestamp: new Date().toISOString(),
+      environment: env.NODE_ENV,
+      uptime: process.uptime(),
     });
   });
 
-  // Health check (unauthenticated, not in swagger)
-  // Returns DB + Redis + queue status with appropriate HTTP status code
+  // Health check: full readiness probe with DB + Redis + queue status
+  // Returns 503 for degraded or error so orchestrators can act
   app.get('/health', { schema: { hide: true } }, async (_request, reply) => {
     const health = await runHealthChecks();
-    const statusCode = health.status === 'ok' ? 200 : health.status === 'degraded' ? 200 : 503;
+    const statusCode = health.status === 'ok' ? 200 : 503;
     return reply.status(statusCode).send(health);
   });
 

@@ -6,8 +6,7 @@ type WaMessagePayload = Record<string, unknown>;
 
 async function sendMessage(phoneNumberId: string, payload: WaMessagePayload): Promise<void> {
   if (!env.WHATSAPP_ACCESS_TOKEN) {
-    // Stub: log in dev, skip silently in prod
-    console.log('[WhatsApp stub]', JSON.stringify({ phoneNumberId, payload }));
+    // WhatsApp not configured - skip silently
     return;
   }
   await fetch(`${GRAPH_BASE}/${phoneNumberId}/messages`, {
