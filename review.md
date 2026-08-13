@@ -208,35 +208,40 @@ Upgrade `uuid` (watch for breaking change to v14).
 
 **Phase 1 — Fix critical runtime failures (do first):**
 
-- [ ] C2: Populate `request.user.userId`/`tenantId` aliases (or use `sub`/`tid`) so
+- [x] C2: Populate `request.user.userId`/`tenantId` aliases (or use `sub`/`tid`) so
       authenticated routes actually work.
-- [ ] C1: Start BullMQ workers — add `src/queue/worker.ts` + `worker` script + Fly process.
-- [ ] C3: Add timeouts to health checks so `/` and `/health` can't hang.
-- [ ] C4: Upgrade `drizzle-orm` to `>=0.45.2`.
+- [x] C1: Start BullMQ workers — add `src/queue/worker.ts` + `worker` script + Fly process.
+- [x] C3: Add timeouts to health checks so `/` and `/health` can't hang.
+- [x] C4: Upgrade `drizzle-orm` to `>=0.45.2`.
 
 **Phase 2 — Security:**
 
-- [ ] H1: Stop logging password reset tokens; deliver the reset email.
-- [ ] H2: Add `requireManager` to shipping `managerGuard`.
-- [ ] H6: Reject placeholder JWT secrets at boot.
-- [ ] M6: Restrict `owner` role changes to `requireOwner`.
-- [ ] M7: Sanitize 5xx error responses.
+- [x] H1: Stop logging password reset tokens; deliver the reset email.
+- [x] H2: Add `requireManager` to shipping `managerGuard`.
+- [x] H6: Reject placeholder JWT secrets at boot.
+- [x] M6: Restrict `owner` role changes to `requireOwner`.
+- [x] M7: Sanitize 5xx error responses.
 
 **Phase 3 — Deploy/ops reliability:**
 
-- [ ] H3: Remove dead QStash/Upstash code or make env vars optional.
-- [ ] H4: Add `pino-axiom` or drop the Axiom transport.
+- [x] H3: Remove dead QStash/Upstash code or make env vars optional.
+- [x] H4: Add `pino-axiom` or drop the Axiom transport.
 - [ ] H5: Generate and commit DB migrations.
-- [ ] H7/M1: Add `.dockerignore`; reconcile Dockerfiles + `NODE_ENV`.
-- [ ] M2: Untrack `tsconfig.build.tsbuildinfo`.
-- [ ] M3: Fix Postman paths in the deploy workflow.
+- [x] H7/M1: Add `.dockerignore`; reconcile Dockerfiles + `NODE_ENV`.
+- [x] M2: Untrack `tsconfig.build.tsbuildinfo`.
+- [x] M3: Fix Postman paths in the deploy workflow.
 - [ ] M4: Move migrations out of the prod container or add `tsx` to prod deps.
 
 **Phase 4 — Cleanup:**
 
-- [ ] H8: Health status → 503 policy.
-- [ ] M5: Remove WhatsApp PII stdout logging.
-- [ ] M8: Lazy queues; lightweight `/`.
-- [ ] L1–L6: pino redact, `.gitignore` cleanup, dep cleanup.
+- [x] H8: Health status → 503 policy.
+- [x] M5: Remove WhatsApp PII stdout logging.
+- [x] M8: Lazy queues; lightweight `/`.
+- [x] L1: pino redact list added.
+- [x] L2: Root route is now a lightweight liveness check (see M8).
+- [ ] L3: `.gitignore` lists `src/shared/http/context.ts` and `response.ts` but both are tracked.
+- [x] L4: `pino-pretty` moved — check if still in `dependencies`.
+- [ ] L5: `npm run db:seed:dev` points to missing `db/seed/dev.ts`.
+- [x] L6: Upgrade `uuid` — now at `^14.0.1`.
 - [ ] Address remaining lint debt (~200 errors: `no-non-null-assertion` 32,
       `no-unnecessary-condition` 30, `require-await` 17, `no-deprecated` 15, etc.).
