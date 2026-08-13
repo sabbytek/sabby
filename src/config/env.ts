@@ -86,13 +86,13 @@ const envSchema = z.object({
   // Email (optional — invoice delivery; emails skipped when not set)
   RESEND_API_KEY: z.string().optional(),
   BREVO_API_KEY: z.string().optional(),
-  EMAIL_FROM: z.string().email().optional(),
+  EMAIL_FROM: z.email().optional(),
 });
 
 function parseEnv() {
   const result = envSchema.safeParse(process.env);
   if (!result.success) {
-    const formatted = result.error.format();
+    const formatted = z.treeifyError(result.error);
     console.error('Invalid environment configuration:', JSON.stringify(formatted, null, 2));
     process.exit(1);
   }
