@@ -86,7 +86,7 @@ const envSchema = z.object({
   // Email (optional — invoice delivery; emails skipped when not set)
   RESEND_API_KEY: z.string().optional(),
   BREVO_API_KEY: z.string().optional(),
-  EMAIL_FROM: z.string().email().optional(),
+  EMAIL_FROM: z.email().optional(),
 });
 
 function parseEnv() {
