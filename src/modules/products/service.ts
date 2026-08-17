@@ -1,4 +1,4 @@
-import { eq, and, like, desc, sql } from 'drizzle-orm';
+import { eq, and, like, desc, sql, ne } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { withTenantSchema } from '../../shared/db/tenant.js';
 import {
@@ -164,6 +164,7 @@ export async function createVariant(
   productId: string,
   input: {
     sku: string;
+    barcode?: string;
     name: string;
     priceKobo: number;
     costKobo?: number;
@@ -186,11 +187,22 @@ export async function createVariant(
       .limit(1);
     if (existingSku) throw new ConflictError(`SKU '${input.sku}' already exists`);
 
+    // Check barcode uniqueness if provided
+    if (input.barcode) {
+      const [existingBarcode] = await db
+        .select({ id: productVariants.id })
+        .from(productVariants)
+        .where(eq(productVariants.barcode, input.barcode))
+        .limit(1);
+      if (existingBarcode) throw new ConflictError(`Barcode '${input.barcode}' already exists`);
+    }
+
     const variantId = uuidv4();
     await db.insert(productVariants).values({
       id: variantId,
       productId,
       sku: input.sku,
+      barcode: input.barcode ?? null,
       name: input.name,
       priceKobo: input.priceKobo,
       costKobo: input.costKobo ?? 0,
@@ -235,6 +247,7 @@ export async function updateVariant(
   productId: string,
   variantId: string,
   input: Partial<{
+    barcode: string | null;
     name: string;
     priceKobo: number;
     costKobo: number;
@@ -253,6 +266,22 @@ export async function updateVariant(
       .limit(1);
     if (!existing) throw new NotFoundError('Variant', variantId);
 
+    // Check barcode uniqueness if provided and not null
+    if (input.barcode !== undefined && input.barcode !== null) {
+      const [existingBarcode] = await db
+        .select({ id: productVariants.id })
+        .from(productVariants)
+        .where(
+          and(
+            eq(productVariants.barcode, input.barcode),
+            // Exclude the current variant from the check
+            ne(productVariants.id, variantId)
+          )
+        )
+        .limit(1);
+      if (existingBarcode) throw new ConflictError(`Barcode '${input.barcode}' already exists`);
+    }
+
     await db
       .update(productVariants)
       .set({ ...input, updatedAt: new Date() })
@@ -263,5 +292,81 @@ export async function updateVariant(
       .from(productVariants)
       .where(eq(productVariants.id, variantId));
     return updated!;
+  });
+}
+
+// ─── Barcode Lookup ────────────────────────────────────────────────────────────
+
+export interface VariantWithProduct {
+  id: string;
+  productId: string;
+  sku: string;
+  barcode: string | null;
+  name: string;
+  priceKobo: number;
+  costKobo: number;
+  taxRateBps: number | null;
+  attributes: string | null;
+  weightKg: number | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  product: {
+    id: string;
+    name: string;
+    description: string | null;
+    categoryId: string | null;
+    imageUrl: string | null;
+    isActive: boolean;
+    hasVariants: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+  };
+}
+
+export async function getVariantByBarcode(
+  schemaName: string,
+  barcode: string,
+): Promise<VariantWithProduct | null> {
+  return withTenantSchema(schemaName, async (db) => {
+    const result = await db
+      .select({
+        id: productVariants.id,
+        productId: productVariants.productId,
+        sku: productVariants.sku,
+        barcode: productVariants.barcode,
+        name: productVariants.name,
+        priceKobo: productVariants.priceKobo,
+        costKobo: productVariants.costKobo,
+        taxRateBps: productVariants.taxRateBps,
+        attributes: productVariants.attributes,
+        weightKg: productVariants.weightKg,
+        isActive: productVariants.isActive,
+        createdAt: productVariants.createdAt,
+        updatedAt: productVariants.updatedAt,
+        product: {
+          id: products.id,
+          name: products.name,
+          description: products.description,
+          categoryId: products.categoryId,
+          imageUrl: products.imageUrl,
+          isActive: products.isActive,
+          hasVariants: products.hasVariants,
+          createdAt: products.createdAt,
+          updatedAt: products.updatedAt,
+        },
+      })
+      .from(productVariants)
+      .innerJoin(products, eq(products.id, productVariants.productId))
+      .where(
+        and(
+          eq(productVariants.barcode, barcode),
+          eq(productVariants.isActive, true),
+          eq(products.isActive, true),
+        ),
+      )
+      .limit(1);
+
+    return result[0] ?? null;
   });
 }

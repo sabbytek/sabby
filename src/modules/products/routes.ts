@@ -15,6 +15,7 @@ import {
   createVariantBodySchema,
   variantParamsSchema,
   updateVariantBodySchema,
+  barcodeParamsSchema,
 } from './validators.js';
 
 const managerGuard = [requireAuth, resolveTenant, requireManager];
@@ -145,6 +146,25 @@ export default async function productsRoutes(app: FastifyInstance) {
       request.params.vid,
       request.body,
     );
+    sendSuccess(reply, variant);
+  });
+
+  // ─── Barcode Lookup ────────────────────────────────────────────────────────────
+
+  typed.get('/barcode/:barcode', {
+    preHandler: readGuard,
+    schema: {
+      tags: ['Products'],
+      summary: 'Look up a product variant by barcode (for POS scanning)',
+      security: [{ bearerAuth: [] }],
+      params: barcodeParamsSchema,
+    },
+  }, async (request, reply) => {
+    const ctx = createContext(request);
+    const variant = await controller.getVariantByBarcodeHandler(ctx, request.params.barcode);
+    if (!variant) {
+      return reply.status(404).send({ error: 'Product not found for this barcode' });
+    }
     sendSuccess(reply, variant);
   });
 }
