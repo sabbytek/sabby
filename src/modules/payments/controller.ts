@@ -22,6 +22,7 @@ export async function initiate(ctx: RequestContext, input: InitiatePaymentInput)
  * Returns a result indicating whether the event was processed.
  */
 export async function handleWebhook(
+  tenantId: string,
   schemaName: string,
   eventType: string,
   data: PaystackWebhookData,
@@ -32,7 +33,6 @@ export async function handleWebhook(
     const { handleSubscriptionBillingWebhook } = await import(
       '../subscriptions/service.js'
     );
-    const tenantId = (meta['tenantId'] as string) ?? '';
     const planTier = (meta['planTier'] as string) ?? '';
     const rawData = data as unknown as Record<string, unknown>;
     const authorization = rawData['authorization'] as Record<string, unknown> | undefined;
@@ -47,6 +47,6 @@ export async function handleWebhook(
       (customer?.['customer_code'] as string) ?? '',
     ).catch(() => {});
   } else {
-    await handlePaystackWebhook(schemaName, eventType, data);
+    await handlePaystackWebhook(tenantId, schemaName, eventType, data);
   }
 }

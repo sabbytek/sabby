@@ -76,11 +76,12 @@ export default async function paymentsRoutes(fastify: FastifyInstance) {
 
           const meta = (payload.data?.metadata ?? {}) as Record<string, unknown>;
           const schemaName = (meta['schemaName'] as string | undefined) ?? '';
+          const tenantId = (meta['tenantId'] as string | undefined) ?? '';
           if (!schemaName) {
             return sendSuccess(reply, undefined);
           }
 
-          await controller.handleWebhook(schemaName, payload.event, payload.data, meta);
+          await controller.handleWebhook(tenantId, schemaName, payload.event, payload.data, meta);
           return sendSuccess(reply, undefined);
         } catch (err) {
           request.log.error({ err }, '[Webhook] Paystack processing error');
@@ -113,11 +114,12 @@ export default async function paymentsRoutes(fastify: FastifyInstance) {
 
           const meta = (payload.data?.metadata ?? {}) as Record<string, unknown>;
           const schemaName = (meta['schemaName'] as string | undefined) ?? '';
+          const tenantId = (meta['tenantId'] as string | undefined) ?? '';
           if (!schemaName) return sendSuccess(reply, undefined);
 
           if (payload.event === 'charge.completed' && payload.data?.status === 'successful') {
             const reference = payload.data.txRef ?? payload.data.tx_ref ?? '';
-            await controller.handleWebhook(schemaName, 'charge.success', {
+            await controller.handleWebhook(tenantId, schemaName, 'charge.success', {
               id: payload.data.id ?? 0,
               reference,
               amount: Math.round((payload.data.amount ?? 0) * 100),

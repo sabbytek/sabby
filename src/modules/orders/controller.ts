@@ -13,6 +13,10 @@ import {
   fulfillOrder,
   cancelOrder,
 } from './service.js';
+import { sendPosReceipt } from './receipt.service.js';
+import { db } from '../../shared/db/client.js';
+import { tenants } from '../../shared/db/schema/public.js';
+import { eq } from 'drizzle-orm';
 
 export interface OrderListQuery {
   page?: string;
@@ -67,4 +71,24 @@ export async function fulfil(ctx: RequestContext, orderId: string): Promise<unkn
 export async function cancel(ctx: RequestContext, orderId: string): Promise<unknown> {
   const result = await cancelOrder(ctx.schema, orderId, ctx.userId);
   return result;
+}
+
+export async function receipt(
+  ctx: RequestContext,
+  orderId: string,
+  channels: Array<'print' | 'whatsapp' | 'email'>,
+): Promise<unknown> {
+  const [tenant] = await db
+    .select({ name: tenants.name })
+    .from(tenants)
+    .where(eq(tenants.id, ctx.tenantId))
+    .limit(1);
+
+  return sendPosReceipt(
+    ctx.tenantId,
+    ctx.schema,
+    orderId,
+    tenant?.name ?? '',
+    channels,
+  );
 }
