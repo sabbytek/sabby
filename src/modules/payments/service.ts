@@ -14,6 +14,10 @@ import {
   orderRefundedTemplate,
 } from '../ledger/templates.js';
 import { env } from '../../config/env.js';
+import { paymentsQueue } from '../../shared/queue/client.js';
+import { db } from '../../shared/db/client.js';
+import { tenants } from '../../shared/db/schema/public.js';
+import type { ReceiptJobData } from '../../shared/queue/workers/payments.worker.js';
 
 // ─── Initiate payment ─────────────────────────────────────────────────────────
 
@@ -84,6 +88,7 @@ export interface PaystackWebhookData {
 }
 
 export async function handlePaystackWebhook(
+  tenantId: string,
   schemaName: string,
   eventType: PaystackEventType,
   data: PaystackWebhookData,
@@ -140,6 +145,20 @@ export async function handlePaystackWebhook(
         await postJournalEntry(schemaName, paymentFeeTemplate(payment.id, feeKobo))
           .catch(() => {});
       }
+
+      // Enqueue automated receipt delivery (non-blocking)
+      const [tenant] = await db
+        .select({ name: tenants.name })
+        .from(tenants)
+        .where(eq(tenants.id, tenantId))
+        .limit(1);
+
+      await paymentsQueue.add('send-receipt', {
+        tenantId,
+        schemaName,
+        orderId: payment.orderId,
+        businessName: tenant?.name ?? '',
+      } satisfies ReceiptJobData).catch(() => {}); // receipt failure must not affect payment
     });
   }
 

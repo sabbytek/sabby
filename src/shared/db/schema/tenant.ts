@@ -135,6 +135,7 @@ export const productVariants = pgTable(
       .notNull()
       .references(() => products.id, { onDelete: 'cascade' }),
     sku: text('sku').notNull(),
+    barcode: text('barcode'), // EAN-13, UPC-A, Code 128, etc. — optional, unique when provided
     name: text('name').notNull(),
     // All monetary values stored in kobo (smallest NGN unit = 1/100 of a naira)
     priceKobo: integer('price_kobo').notNull(),
@@ -150,6 +151,7 @@ export const productVariants = pgTable(
   },
   (table) => ({
     skuIdx: uniqueIndex('product_variants_sku_idx').on(table.sku),
+    barcodeIdx: uniqueIndex('product_variants_barcode_idx').on(table.barcode),
     productIdx: index('product_variants_product_idx').on(table.productId),
   }),
 );

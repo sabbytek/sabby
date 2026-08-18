@@ -32,5 +32,10 @@ export const idParamsSchema = z.object({
   id: z.string(),
 });
 
+export const receiptBodySchema = z.object({
+  channels: z.array(z.enum(['print', 'whatsapp', 'email'])).min(1).optional(),
+}).strict();
+
 export type CreateOrderBody = z.infer<typeof createOrderBodySchema>;
 export type ListOrdersQuery = z.infer<typeof listOrdersQuerySchema>;
+export type ReceiptBody = z.infer<typeof receiptBodySchema>;

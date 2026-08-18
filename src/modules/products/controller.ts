@@ -9,6 +9,8 @@ import {
   updateProduct,
   createVariant,
   updateVariant,
+  getVariantByBarcode,
+  type VariantWithProduct,
 } from './service.js';
 
 function sanitizeVariant(v: ProductVariant, hideMargin: boolean): Omit<ProductVariant, 'costKobo'> | ProductVariant {
@@ -92,6 +94,7 @@ export async function createVariantHandler(
   productId: string,
   input: {
     sku: string;
+    barcode?: string;
     name: string;
     priceKobo: number;
     costKobo?: number;
@@ -108,6 +111,7 @@ export async function updateVariantHandler(
   productId: string,
   variantId: string,
   input: Partial<{
+    barcode: string | null;
     name: string;
     priceKobo: number;
     costKobo: number;
@@ -118,4 +122,19 @@ export async function updateVariantHandler(
 ): Promise<unknown> {
   const result = await updateVariant(ctx.schema, productId, variantId, input);
   return result;
+}
+
+export async function getVariantByBarcodeHandler(
+  ctx: RequestContext,
+  barcode: string,
+): Promise<VariantWithProduct | null> {
+  const variant = await getVariantByBarcode(ctx.schema, barcode);
+  if (!variant) return null;
+
+  // Hide costKobo for staff users
+  if (ctx.role === 'staff') {
+    const { costKobo: _cost, ...safe } = variant;
+    return safe as VariantWithProduct;
+  }
+  return variant;
 }

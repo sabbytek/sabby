@@ -11,6 +11,7 @@ import {
   createOrderBodySchema,
   listOrdersQuerySchema,
   idParamsSchema,
+  receiptBodySchema,
 } from './validators.js';
 
 const readGuard = [requireAuth, resolveTenant, requireFeature('orders:create')];
@@ -123,5 +124,27 @@ export default async function ordersRoutes(app: FastifyInstance) {
     const ctx = createContext(request);
     const order = await controller.cancel(ctx, request.params.id);
     sendSuccess(reply, order);
+  });
+
+  // ─── POS receipt ──────────────────────────────────────────────────────────
+
+  typed.post('/:id/receipt', {
+    preHandler: readGuard,
+    schema: {
+      tags: ['Orders'],
+      summary: 'Generate and deliver a receipt for an order (POS manual trigger)',
+      description:
+        'Renders a receipt PDF and delivers it via the requested channel(s). ' +
+        '"print" returns the pdfUrl for the client to open/print. ' +
+        '"email" sends to the customer email on file. ' +
+        '"whatsapp" sends a WhatsApp message with a download link.',
+      security: [{ bearerAuth: [] }],
+      params: idParamsSchema,
+      body: receiptBodySchema,
+    },
+  }, async (request, reply) => {
+    const ctx = createContext(request);
+    const result = await controller.receipt(ctx, request.params.id, request.body.channels ?? ['print']);
+    sendSuccess(reply, result);
   });
 }
