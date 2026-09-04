@@ -37,6 +37,7 @@ import onboardingRoutes from './modules/onboarding/routes.js';
 import dispatchRoutes from './modules/dispatch/routes.js';
 import uploadsRoutes from './modules/uploads/routes.js';
 import shippingRoutes from './modules/shipping/routes.js';
+import platformRoutes from './modules/platform/routes.js';
 
 export function buildApp() {
   /* eslint-disable @typescript-eslint/no-unsafe-assignment */
@@ -92,6 +93,23 @@ export function buildApp() {
     }),
   });
 
+  // Platform ops plane JWT — a SEPARATE audience with its own secret, so a
+  // tenant token can never be replayed against a platform route (and vice
+  // versa). Decorates app.jwt.platform.sign and request.platformJwtVerify.
+  void app.register(jwtPlugin, {
+    namespace: 'platform',
+    secret: env.PLATFORM_JWT_ACCESS_SECRET,
+    sign: {
+      expiresIn: env.PLATFORM_JWT_ACCESS_EXPIRY,
+      aud: 'sabby-platform',
+      iss: 'sabby-platform',
+    },
+    verify: { allowedAud: 'sabby-platform', allowedIss: 'sabby-platform' },
+    jwtVerify: 'platformJwtVerify',
+    jwtSign: 'platformJwtSign',
+    decoratorName: 'platformTokenPayload',
+  });
+
   registerRequestId(app);
 
   // Root route (unauthenticated, not in swagger)
@@ -125,16 +143,17 @@ export function buildApp() {
   void app.register(paymentsRoutes, { prefix: '/v1/payments' });
   void app.register(ledgerRoutes, { prefix: '/v1/ledger' });
   void app.register(subscriptionsRoutes, { prefix: '/v1/subscriptions' });
-  void app.register(locationsRoutes,    { prefix: '/v1/locations' });
-  void app.register(staffRoutes,        { prefix: '/v1/staff' });
-  void app.register(expensesRoutes,     { prefix: '/v1/expenses' });
-  void app.register(reportingRoutes,    { prefix: '/v1/reports' });
-  void app.register(invoicingRoutes,    { prefix: '/v1/invoices' });
-  void app.register(whatsappRoutes,    { prefix: '/v1/whatsapp' });
-  void app.register(onboardingRoutes,  { prefix: '/v1/onboarding' });
-  void app.register(dispatchRoutes,    { prefix: '/v1/dispatch' });
-  void app.register(uploadsRoutes,     { prefix: '/v1/uploads' });
-  void app.register(shippingRoutes,   { prefix: '/v1/shipping' });
+  void app.register(locationsRoutes, { prefix: '/v1/locations' });
+  void app.register(staffRoutes, { prefix: '/v1/staff' });
+  void app.register(expensesRoutes, { prefix: '/v1/expenses' });
+  void app.register(reportingRoutes, { prefix: '/v1/reports' });
+  void app.register(invoicingRoutes, { prefix: '/v1/invoices' });
+  void app.register(whatsappRoutes, { prefix: '/v1/whatsapp' });
+  void app.register(onboardingRoutes, { prefix: '/v1/onboarding' });
+  void app.register(dispatchRoutes, { prefix: '/v1/dispatch' });
+  void app.register(uploadsRoutes, { prefix: '/v1/uploads' });
+  void app.register(shippingRoutes, { prefix: '/v1/shipping' });
+  void app.register(platformRoutes, { prefix: '/v1/platform' });
 
   return app;
 }

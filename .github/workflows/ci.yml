@@ -40,6 +40,8 @@ jobs:
       DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
       JWT_ACCESS_SECRET: test-access-secret-at-least-32-chars-long
       JWT_REFRESH_SECRET: test-refresh-secret-at-least-32-chars-long
+      PLATFORM_JWT_ACCESS_SECRET: test-platform-access-secret-at-least-32-chars
+      PLATFORM_JWT_REFRESH_SECRET: test-platform-refresh-secret-at-least-32-chars
       REDIS_URL: redis://localhost:6379
       R2_ACCOUNT_ID: test
       R2_ACCESS_KEY_ID: test

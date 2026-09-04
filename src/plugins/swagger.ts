@@ -35,13 +35,27 @@ async function swaggerPlugin(app: FastifyInstance) {
             scheme: 'bearer',
             bearerFormat: 'JWT',
           },
+          platformBearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT',
+            description: 'Platform ops plane token (separate audience from tenant tokens)',
+          },
         },
       },
       tags: [
         { name: 'Auth', description: 'Authentication and session management' },
+        {
+          name: 'Platform',
+          description: 'Platform ops plane: cross-tenant staff auth and oversight',
+        },
         { name: 'Tenants', description: 'Tenant provisioning and management' },
         { name: 'Products', description: 'Product catalogue and variants' },
-        { name: 'Inventory', description: 'Stock tracking, movement, cross-branch availability, and inter-location transfers' },
+        {
+          name: 'Inventory',
+          description:
+            'Stock tracking, movement, cross-branch availability, and inter-location transfers',
+        },
         { name: 'Customers', description: 'Customer records' },
         { name: 'Orders', description: 'Order pipeline' },
         { name: 'Payments', description: 'Payment processing and webhooks' },
