@@ -1,6 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from '@fastify/type-provider-zod';
-import { requirePlatformAuth, getPlatformAuth } from '../../shared/middleware/platform-auth.js';
+import {
+  requirePlatformAuth,
+  requirePlatformPermission,
+  getPlatformAuth,
+} from '../../shared/middleware/platform-auth.js';
 import { sendSuccess } from '../../shared/http/response.js';
 import * as controller from './controller.js';
 import {
@@ -8,6 +12,8 @@ import {
   platformRefreshBodySchema,
   platformLogoutBodySchema,
   mfaConfirmBodySchema,
+  tenantListQuerySchema,
+  tenantIdParamSchema,
 } from './validators.js';
 
 /**
@@ -124,6 +130,58 @@ export default function platformRoutes(app: FastifyInstance) {
         request.body.totp,
         request,
       );
+      sendSuccess(reply, result);
+    },
+  );
+
+  // ─── Tenant oversight (read-only) ───────────────────────────────────────────
+
+  typed.get(
+    '/overview',
+    {
+      preHandler: [requirePlatformPermission('platform:view')],
+      schema: {
+        tags: ['Platform'],
+        summary: 'Platform KPIs: tenant counts, status and plan distribution',
+        security: [{ platformBearerAuth: [] }],
+      },
+    },
+    async (_request, reply) => {
+      const result = await controller.overview();
+      sendSuccess(reply, result);
+    },
+  );
+
+  typed.get(
+    '/tenants',
+    {
+      preHandler: [requirePlatformPermission('tenant:read')],
+      schema: {
+        tags: ['Platform'],
+        summary: 'List tenants (paginated, searchable; PII masked)',
+        security: [{ platformBearerAuth: [] }],
+        querystring: tenantListQuerySchema,
+      },
+    },
+    async (request, reply) => {
+      const result = await controller.tenants(request.query);
+      sendSuccess(reply, result);
+    },
+  );
+
+  typed.get(
+    '/tenants/:id',
+    {
+      preHandler: [requirePlatformPermission('tenant:read')],
+      schema: {
+        tags: ['Platform'],
+        summary: 'Tenant detail with usage metrics and onboarding (PII masked)',
+        security: [{ platformBearerAuth: [] }],
+        params: tenantIdParamSchema,
+      },
+    },
+    async (request, reply) => {
+      const result = await controller.tenantDetail(request.params.id);
       sendSuccess(reply, result);
     },
   );
