@@ -9,16 +9,44 @@ const envSchema = z.object({
   DATABASE_URL: z.url(),
 
   // JWT
-  JWT_ACCESS_SECRET: z.string().min(32).refine(
-    (val) => !val.startsWith('replace-with-'),
-    'JWT_ACCESS_SECRET cannot use placeholder value',
-  ),
-  JWT_REFRESH_SECRET: z.string().min(32).refine(
-    (val) => !val.startsWith('replace-with-'),
-    'JWT_REFRESH_SECRET cannot use placeholder value',
-  ),
+  JWT_ACCESS_SECRET: z
+    .string()
+    .min(32)
+    .refine(
+      (val) => !val.startsWith('replace-with-'),
+      'JWT_ACCESS_SECRET cannot use placeholder value',
+    ),
+  JWT_REFRESH_SECRET: z
+    .string()
+    .min(32)
+    .refine(
+      (val) => !val.startsWith('replace-with-'),
+      'JWT_REFRESH_SECRET cannot use placeholder value',
+    ),
   JWT_ACCESS_EXPIRY: z.string().default('15m'),
   JWT_REFRESH_EXPIRY: z.string().default('7d'),
+
+  // Platform ops plane JWT — a SEPARATE audience from tenant tokens, with its
+  // own secrets so a tenant token can never be replayed against a platform
+  // route and vice versa. See sabby-admin/docs/ADMIN-DASHBOARD-PLAN.md.
+  PLATFORM_JWT_ACCESS_SECRET: z
+    .string()
+    .min(32)
+    .refine(
+      (val) => !val.startsWith('replace-with-'),
+      'PLATFORM_JWT_ACCESS_SECRET cannot use placeholder value',
+    ),
+  PLATFORM_JWT_REFRESH_SECRET: z
+    .string()
+    .min(32)
+    .refine(
+      (val) => !val.startsWith('replace-with-'),
+      'PLATFORM_JWT_REFRESH_SECRET cannot use placeholder value',
+    ),
+  PLATFORM_JWT_ACCESS_EXPIRY: z.string().default('15m'),
+  PLATFORM_JWT_REFRESH_EXPIRY: z.string().default('7d'),
+  // Label shown in authenticator apps when a platform user enrols MFA.
+  PLATFORM_MFA_ISSUER: z.string().default('Sabby Ops'),
 
   // Redis
   REDIS_URL: z.string().default('redis://localhost:6379'),
@@ -71,7 +99,11 @@ const envSchema = z.object({
   SWAGGER_ENABLED: z.coerce.boolean().default(true),
 
   // Uploads
-  MAX_UPLOAD_SIZE_BYTES: z.coerce.number().int().positive().default(10 * 1024 * 1024), // 10MB raw cap pre-compression
+  MAX_UPLOAD_SIZE_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(10 * 1024 * 1024), // 10MB raw cap pre-compression
 
   // Alerting (optional — Slack notifications for server errors)
   SLACK_WEBHOOK_URL: z.url().optional(),

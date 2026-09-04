@@ -1,5 +1,5 @@
 import '@fastify/jwt';
-import type { TenantContext } from './index.js';
+import type { TenantContext, PlatformAuthUser, PlatformJwtPayload } from './index.js';
 
 /**
  * JWT payload stored in the token.
@@ -30,5 +30,10 @@ declare module '@fastify/jwt' {
 declare module 'fastify' {
   interface FastifyRequest {
     tenant: TenantContext;
+    // Platform ops plane. `platformJwtVerify` is decorated by the second,
+    // namespaced @fastify/jwt instance; `platformAuth` is the normalized
+    // context our middleware attaches after a successful verify.
+    platformJwtVerify<Decoded = PlatformJwtPayload>(): Promise<Decoded>;
+    platformAuth?: PlatformAuthUser;
   }
 }
