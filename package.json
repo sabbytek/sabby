@@ -23,7 +23,9 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/shared/db/migrate.ts",
     "db:migrate:tenant": "tsx src/shared/db/migrate-tenant.ts",
+    "db:migrate:platform": "tsx scripts/migrate-platform.ts",
     "db:seed:qa": "tsx db/seed/qa.ts",
+    "db:seed:platform": "tsx db/seed/platform-user.ts",
     "docs:export": "tsx scripts/export-openapi.ts"
   },
   "dependencies": {

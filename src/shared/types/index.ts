@@ -14,9 +14,27 @@ export interface AuthUser {
 
 export type UserRole = 'owner' | 'manager' | 'staff' | 'viewer';
 
+// ─── Platform ops plane ────────────────────────────────────────────────────────
+// Cross-tenant staff identities. A platform user has NO tenant scope.
+
+export type PlatformRole = 'support' | 'admin' | 'super_admin';
+
+export interface PlatformAuthUser {
+  userId: string;
+  email: string;
+  role: PlatformRole;
+}
+
+export interface PlatformJwtPayload {
+  sub: string; // platform user id
+  role: PlatformRole;
+  email: string;
+  type: 'access';
+}
+
 export interface JwtPayload {
-  sub: string;       // userId
-  tid: string;       // tenantId
+  sub: string; // userId
+  tid: string; // tenantId
   role: UserRole;
   email: string;
   type: 'access' | 'refresh';
@@ -59,4 +77,3 @@ export interface PaginatedResult<T> {
   limit: number;
   totalPages: number;
 }
-
