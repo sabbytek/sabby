@@ -11,6 +11,12 @@ import {
   beginMfaEnrollment,
   confirmMfaEnrollment,
 } from './service.js';
+import {
+  getOverviewKpis,
+  listTenants,
+  getTenantDetail,
+  type ListTenantsInput,
+} from './oversight-service.js';
 import { recordAudit } from './audit.js';
 import type { PlatformAuthUser } from '../../shared/types/index.js';
 import type { PlatformLoginBody } from './validators.js';
@@ -76,4 +82,19 @@ export async function verifyMfaEnrollment(
     ...auditContext(request),
   });
   return { message: 'MFA enabled successfully' };
+}
+
+// ─── Tenant oversight (read-only) ─────────────────────────────────────────────
+// Reads are not audited; only state changes and PII reveals are.
+
+export async function overview(): Promise<unknown> {
+  return getOverviewKpis();
+}
+
+export async function tenants(query: ListTenantsInput): Promise<unknown> {
+  return listTenants(query);
+}
+
+export async function tenantDetail(id: string): Promise<unknown> {
+  return getTenantDetail(id);
 }
