@@ -46,6 +46,21 @@ export const tenantIdParamSchema = z
   })
   .strict();
 
+export const changePlanBodySchema = z
+  .object({
+    planTier: z.enum(['trial', 'entry', 'growth', 'enterprise']),
+  })
+  .strict();
+
+export const extendTrialBodySchema = z
+  .object({
+    days: z.coerce.number().int().min(1).max(365),
+  })
+  .strict();
+
+export type ChangePlanBody = z.infer<typeof changePlanBodySchema>;
+export type ExtendTrialBody = z.infer<typeof extendTrialBodySchema>;
+
 export type TenantListQuery = z.infer<typeof tenantListQuerySchema>;
 export type TenantIdParam = z.infer<typeof tenantIdParamSchema>;
 
