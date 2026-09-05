@@ -4,7 +4,12 @@ import { eq, and, gt, isNull } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { db } from '../../shared/db/client.js';
 import { platformUsers, platformRefreshTokens } from '../../shared/db/schema/public.js';
-import { UnauthorizedError, NotFoundError, ValidationError } from '../../shared/errors/types.js';
+import {
+  UnauthorizedError,
+  NotFoundError,
+  ValidationError,
+  ForbiddenError,
+} from '../../shared/errors/types.js';
 import type { PlatformJwtPayload, PlatformRole } from '../../shared/types/index.js';
 import { encrypt, decrypt } from '../../shared/crypto/encrypt.js';
 import { generateTotpSecret, verifyTotp, buildOtpauthUri } from '../../shared/crypto/totp.js';
@@ -199,6 +204,33 @@ export async function getPlatformUserById(id: string): Promise<{
     role: user.role,
     mfaEnabled: user.mfaEnabled,
   };
+}
+
+// ─── MFA enforcement policy ───────────────────────────────────────────────────
+// Policy: MFA is recommended for everyone, and ENFORCED (blocking) for admin and
+// super-admin — the roles that can change money and account state. Support is
+// nudged toward enrollment by the console but not blocked.
+
+export function mfaRequiredForRole(role: PlatformRole): boolean {
+  return role === 'admin' || role === 'super_admin';
+}
+
+/**
+ * Guards a sensitive action: if the actor's role requires MFA, they must have it
+ * enrolled. Enforced server-side so the console's enrollment redirect cannot be
+ * bypassed. Checks live state rather than trusting a token claim.
+ */
+export async function assertMfaEnrolled(userId: string, role: PlatformRole): Promise<void> {
+  if (!mfaRequiredForRole(role)) return;
+  const [user] = await db
+    .select({ mfaEnabled: platformUsers.mfaEnabled })
+    .from(platformUsers)
+    .where(and(eq(platformUsers.id, userId), eq(platformUsers.isActive, true)))
+    .limit(1);
+  if (!user) throw new NotFoundError('Platform user', userId);
+  if (!user.mfaEnabled) {
+    throw new ForbiddenError('MFA enrollment is required before performing this action.');
+  }
 }
 
 // ─── MFA enrollment ─────────────────────────────────────────────────────────

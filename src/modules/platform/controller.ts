@@ -17,9 +17,13 @@ import {
   getTenantDetail,
   type ListTenantsInput,
 } from './oversight-service.js';
+import { setTenantActive, changeTenantPlan, extendTenantTrial } from './mutations-service.js';
+import { assertMfaEnrolled } from './service.js';
 import { recordAudit } from './audit.js';
 import type { PlatformAuthUser } from '../../shared/types/index.js';
 import type { PlatformLoginBody } from './validators.js';
+
+type PlanTier = 'trial' | 'entry' | 'growth' | 'enterprise';
 
 function auditContext(request: FastifyRequest): { ip: string; requestId: string } {
   return { ip: request.ip, requestId: request.id };
@@ -97,4 +101,92 @@ export async function tenants(query: ListTenantsInput): Promise<unknown> {
 
 export async function tenantDetail(id: string): Promise<unknown> {
   return getTenantDetail(id);
+}
+
+// ─── Tenant mutations (audited; MFA enforced for admin/super-admin) ────────────
+
+export async function suspendTenant(
+  actor: PlatformAuthUser,
+  id: string,
+  request: FastifyRequest,
+): Promise<unknown> {
+  await assertMfaEnrolled(actor.userId, actor.role);
+  const result = await setTenantActive(id, false);
+  await recordAudit({
+    actorId: actor.userId,
+    actorEmail: actor.email,
+    action: 'tenant.suspend',
+    targetType: 'tenant',
+    targetId: id,
+    summary: `Suspended ${result.summary.name}`,
+    before: result.before,
+    after: result.after,
+    ...auditContext(request),
+  });
+  return result.summary;
+}
+
+export async function reactivateTenant(
+  actor: PlatformAuthUser,
+  id: string,
+  request: FastifyRequest,
+): Promise<unknown> {
+  await assertMfaEnrolled(actor.userId, actor.role);
+  const result = await setTenantActive(id, true);
+  await recordAudit({
+    actorId: actor.userId,
+    actorEmail: actor.email,
+    action: 'tenant.reactivate',
+    targetType: 'tenant',
+    targetId: id,
+    summary: `Reactivated ${result.summary.name}`,
+    before: result.before,
+    after: result.after,
+    ...auditContext(request),
+  });
+  return result.summary;
+}
+
+export async function changePlan(
+  actor: PlatformAuthUser,
+  id: string,
+  planTier: PlanTier,
+  request: FastifyRequest,
+): Promise<unknown> {
+  await assertMfaEnrolled(actor.userId, actor.role);
+  const result = await changeTenantPlan(id, planTier);
+  await recordAudit({
+    actorId: actor.userId,
+    actorEmail: actor.email,
+    action: 'tenant.plan_change',
+    targetType: 'tenant',
+    targetId: id,
+    summary: `Plan ${String(result.before['planTier'])} → ${String(result.after['planTier'])}`,
+    before: result.before,
+    after: result.after,
+    ...auditContext(request),
+  });
+  return result.summary;
+}
+
+export async function extendTrial(
+  actor: PlatformAuthUser,
+  id: string,
+  days: number,
+  request: FastifyRequest,
+): Promise<unknown> {
+  await assertMfaEnrolled(actor.userId, actor.role);
+  const result = await extendTenantTrial(id, days);
+  await recordAudit({
+    actorId: actor.userId,
+    actorEmail: actor.email,
+    action: 'tenant.trial_extend',
+    targetType: 'tenant',
+    targetId: id,
+    summary: `Extended trial by ${String(days)} days`,
+    before: result.before,
+    after: result.after,
+    ...auditContext(request),
+  });
+  return result.summary;
 }

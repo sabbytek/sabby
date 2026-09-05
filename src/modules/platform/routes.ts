@@ -14,6 +14,8 @@ import {
   mfaConfirmBodySchema,
   tenantListQuerySchema,
   tenantIdParamSchema,
+  changePlanBodySchema,
+  extendTrialBodySchema,
 } from './validators.js';
 
 /**
@@ -182,6 +184,96 @@ export default function platformRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const result = await controller.tenantDetail(request.params.id);
+      sendSuccess(reply, result);
+    },
+  );
+
+  // ─── Tenant mutations (audited; MFA enforced for admin/super-admin) ──────────
+
+  typed.post(
+    '/tenants/:id/suspend',
+    {
+      preHandler: [requirePlatformPermission('tenant:suspend')],
+      schema: {
+        tags: ['Platform'],
+        summary: 'Suspend a tenant (blocks tenant access)',
+        security: [{ platformBearerAuth: [] }],
+        params: tenantIdParamSchema,
+      },
+    },
+    async (request, reply) => {
+      const result = await controller.suspendTenant(
+        getPlatformAuth(request),
+        request.params.id,
+        request,
+      );
+      sendSuccess(reply, result);
+    },
+  );
+
+  typed.post(
+    '/tenants/:id/reactivate',
+    {
+      preHandler: [requirePlatformPermission('tenant:suspend')],
+      schema: {
+        tags: ['Platform'],
+        summary: 'Reactivate a suspended tenant',
+        security: [{ platformBearerAuth: [] }],
+        params: tenantIdParamSchema,
+      },
+    },
+    async (request, reply) => {
+      const result = await controller.reactivateTenant(
+        getPlatformAuth(request),
+        request.params.id,
+        request,
+      );
+      sendSuccess(reply, result);
+    },
+  );
+
+  typed.post(
+    '/tenants/:id/plan',
+    {
+      preHandler: [requirePlatformPermission('tenant:plan:manage')],
+      schema: {
+        tags: ['Platform'],
+        summary: 'Change a tenant plan tier (manual override)',
+        security: [{ platformBearerAuth: [] }],
+        params: tenantIdParamSchema,
+        body: changePlanBodySchema,
+      },
+    },
+    async (request, reply) => {
+      const result = await controller.changePlan(
+        getPlatformAuth(request),
+        request.params.id,
+        request.body.planTier,
+        request,
+      );
+      sendSuccess(reply, result);
+    },
+  );
+
+  typed.post(
+    '/tenants/:id/extend-trial',
+    {
+      preHandler: [requirePlatformPermission('tenant:plan:manage')],
+      schema: {
+        tags: ['Platform'],
+        summary: 'Extend a trial tenant subscription window',
+        security: [{ platformBearerAuth: [] }],
+        params: tenantIdParamSchema,
+        body: extendTrialBodySchema,
+      },
+    },
+    async (request, reply) => {
+      const result = await controller.extendTrial(
+        getPlatformAuth(request),
+        request.params.id,
+        request.body.days,
+        request,
+      );
       sendSuccess(reply, result);
     },
   );
