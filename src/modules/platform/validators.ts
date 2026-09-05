@@ -30,6 +30,40 @@ export const mfaConfirmBodySchema = z
   })
   .strict();
 
+export const tenantListQuerySchema = z
+  .object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+    q: z.string().trim().min(1).max(200).optional(),
+    status: z.enum(['trial', 'active', 'grace', 'lapsed', 'cancelled']).optional(),
+    plan: z.enum(['trial', 'entry', 'growth', 'enterprise']).optional(),
+  })
+  .strict();
+
+export const tenantIdParamSchema = z
+  .object({
+    id: z.string().min(1),
+  })
+  .strict();
+
+export const changePlanBodySchema = z
+  .object({
+    planTier: z.enum(['trial', 'entry', 'growth', 'enterprise']),
+  })
+  .strict();
+
+export const extendTrialBodySchema = z
+  .object({
+    days: z.coerce.number().int().min(1).max(365),
+  })
+  .strict();
+
+export type ChangePlanBody = z.infer<typeof changePlanBodySchema>;
+export type ExtendTrialBody = z.infer<typeof extendTrialBodySchema>;
+
+export type TenantListQuery = z.infer<typeof tenantListQuerySchema>;
+export type TenantIdParam = z.infer<typeof tenantIdParamSchema>;
+
 export type PlatformLoginBody = z.infer<typeof platformLoginBodySchema>;
 export type PlatformRefreshBody = z.infer<typeof platformRefreshBodySchema>;
 export type PlatformLogoutBody = z.infer<typeof platformLogoutBodySchema>;
