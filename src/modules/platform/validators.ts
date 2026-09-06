@@ -61,6 +61,18 @@ export const extendTrialBodySchema = z
 export type ChangePlanBody = z.infer<typeof changePlanBodySchema>;
 export type ExtendTrialBody = z.infer<typeof extendTrialBodySchema>;
 
+export const auditListQuerySchema = z
+  .object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(25),
+    action: z.string().trim().min(1).max(100).optional(),
+    targetType: z.string().trim().min(1).max(50).optional(),
+    targetId: z.string().trim().min(1).max(200).optional(),
+  })
+  .strict();
+
+export type AuditListQuery = z.infer<typeof auditListQuerySchema>;
+
 export type TenantListQuery = z.infer<typeof tenantListQuerySchema>;
 export type TenantIdParam = z.infer<typeof tenantIdParamSchema>;
 
