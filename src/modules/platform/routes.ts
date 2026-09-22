@@ -16,6 +16,7 @@ import {
   tenantIdParamSchema,
   changePlanBodySchema,
   extendTrialBodySchema,
+  auditListQuerySchema,
 } from './validators.js';
 
 /**
@@ -184,6 +185,23 @@ export default function platformRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const result = await controller.tenantDetail(request.params.id);
+      sendSuccess(reply, result);
+    },
+  );
+
+  typed.get(
+    '/audit',
+    {
+      preHandler: [requirePlatformPermission('audit:read:own')],
+      schema: {
+        tags: ['Platform'],
+        summary: 'Read the platform audit log (own actions, or all with audit:read:all)',
+        security: [{ platformBearerAuth: [] }],
+        querystring: auditListQuerySchema,
+      },
+    },
+    async (request, reply) => {
+      const result = await controller.auditLog(getPlatformAuth(request), request.query);
       sendSuccess(reply, result);
     },
   );

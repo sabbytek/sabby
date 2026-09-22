@@ -18,7 +18,9 @@ import {
   type ListTenantsInput,
 } from './oversight-service.js';
 import { setTenantActive, changeTenantPlan, extendTenantTrial } from './mutations-service.js';
+import { listAuditLog, type ListAuditInput } from './audit-query.js';
 import { assertMfaEnrolled } from './service.js';
+import { roleHasPermission } from './permissions.js';
 import { recordAudit } from './audit.js';
 import type { PlatformAuthUser } from '../../shared/types/index.js';
 import type { PlatformLoginBody } from './validators.js';
@@ -101,6 +103,20 @@ export async function tenants(query: ListTenantsInput): Promise<unknown> {
 
 export async function tenantDetail(id: string): Promise<unknown> {
   return getTenantDetail(id);
+}
+
+// ─── Audit log (read) ─────────────────────────────────────────────────────────
+// audit:read:all sees every actor; otherwise the viewer sees only their own.
+
+export async function auditLog(
+  actor: PlatformAuthUser,
+  query: Omit<ListAuditInput, 'restrictToActorId'>,
+): Promise<unknown> {
+  const canReadAll = roleHasPermission(actor.role, 'audit:read:all');
+  return listAuditLog({
+    ...query,
+    restrictToActorId: canReadAll ? undefined : actor.userId,
+  });
 }
 
 // ─── Tenant mutations (audited; MFA enforced for admin/super-admin) ────────────
