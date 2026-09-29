@@ -1,13 +1,7 @@
 import { ValidationError } from '../../shared/errors/types.js';
 
 export type OrderStatus =
-  | 'draft'
-  | 'confirmed'
-  | 'processing'
-  | 'fulfilled'
-  | 'dispatched'
-  | 'cancelled'
-  | 'refunded';
+  'draft' | 'confirmed' | 'processing' | 'fulfilled' | 'dispatched' | 'cancelled' | 'refunded';
 
 const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   draft: ['confirmed', 'cancelled'],

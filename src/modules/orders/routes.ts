@@ -7,12 +7,7 @@ import { requireManager } from '../../shared/middleware/auth.js';
 import { createContext } from '../../shared/http/context.js';
 import { sendSuccess, sendCreated } from '../../shared/http/response.js';
 import * as controller from './controller.js';
-import {
-  createOrderBodySchema,
-  listOrdersQuerySchema,
-  idParamsSchema,
-  receiptBodySchema,
-} from './validators.js';
+import { createOrderBodySchema, listOrdersQuerySchema, idParamsSchema } from './validators.js';
 
 const readGuard = [requireAuth, resolveTenant, requireFeature('orders:create')];
 const managerGuard = [requireAuth, resolveTenant, requireManager, requireFeature('orders:create')];
@@ -22,129 +17,135 @@ export default async function ordersRoutes(app: FastifyInstance) {
 
   // ─── Create draft order ────────────────────────────────────────────────────
 
-  typed.post('/', {
-    preHandler: readGuard,
-    schema: {
-      tags: ['Orders'],
-      summary: 'Create a draft order',
-      security: [{ bearerAuth: [] }],
-      body: createOrderBodySchema,
+  typed.post(
+    '/',
+    {
+      preHandler: readGuard,
+      schema: {
+        tags: ['Orders'],
+        summary: 'Create a draft order',
+        security: [{ bearerAuth: [] }],
+        body: createOrderBodySchema,
+      },
     },
-  }, async (request, reply) => {
-    const ctx = createContext(request);
-    const order = await controller.create(ctx, request.body);
-    sendCreated(reply, order);
-  });
+    async (request, reply) => {
+      const ctx = createContext(request);
+      const order = await controller.create(ctx, request.body);
+      return sendCreated(reply, order);
+    },
+  );
 
   // ─── List orders ───────────────────────────────────────────────────────────
 
-  typed.get('/', {
-    preHandler: readGuard,
-    schema: {
-      tags: ['Orders'],
-      summary: 'List orders (paginated, filterable)',
-      security: [{ bearerAuth: [] }],
-      querystring: listOrdersQuerySchema,
+  typed.get(
+    '/',
+    {
+      preHandler: readGuard,
+      schema: {
+        tags: ['Orders'],
+        summary: 'List orders (paginated, filterable)',
+        security: [{ bearerAuth: [] }],
+        querystring: listOrdersQuerySchema,
+      },
     },
-  }, async (request, reply) => {
-    const ctx = createContext(request);
-    const result = await controller.list(ctx, request.query);
-    sendSuccess(reply, result);
-  });
+    async (request, reply) => {
+      const ctx = createContext(request);
+      const result = await controller.list(ctx, request.query);
+      return sendSuccess(reply, result);
+    },
+  );
 
   // ─── Get single order ─────────────────────────────────────────────────────
 
-  typed.get('/:id', {
-    preHandler: readGuard,
-    schema: {
-      tags: ['Orders'],
-      summary: 'Get a single order with its line items',
-      security: [{ bearerAuth: [] }],
-      params: idParamsSchema,
+  typed.get(
+    '/:id',
+    {
+      preHandler: readGuard,
+      schema: {
+        tags: ['Orders'],
+        summary: 'Get a single order with its line items',
+        security: [{ bearerAuth: [] }],
+        params: idParamsSchema,
+      },
     },
-  }, async (request, reply) => {
-    const ctx = createContext(request);
-    const order = await controller.get(ctx, request.params.id);
-    sendSuccess(reply, order);
-  });
+    async (request, reply) => {
+      const ctx = createContext(request);
+      const order = await controller.get(ctx, request.params.id);
+      return sendSuccess(reply, order);
+    },
+  );
 
   // ─── State transitions ────────────────────────────────────────────────────
 
-  typed.post('/:id/confirm', {
-    preHandler: managerGuard,
-    schema: {
-      tags: ['Orders'],
-      summary: 'Confirm an order (validates and deducts stock)',
-      security: [{ bearerAuth: [] }],
-      params: idParamsSchema,
+  typed.post(
+    '/:id/confirm',
+    {
+      preHandler: managerGuard,
+      schema: {
+        tags: ['Orders'],
+        summary: 'Confirm an order (validates and deducts stock)',
+        security: [{ bearerAuth: [] }],
+        params: idParamsSchema,
+      },
     },
-  }, async (request, reply) => {
-    const ctx = createContext(request);
-    const order = await controller.confirm(ctx, request.params.id);
-    sendSuccess(reply, order);
-  });
-
-  typed.post('/:id/process', {
-    preHandler: readGuard,
-    schema: {
-      tags: ['Orders'],
-      summary: 'Move an order to processing',
-      security: [{ bearerAuth: [] }],
-      params: idParamsSchema,
+    async (request, reply) => {
+      const ctx = createContext(request);
+      const order = await controller.confirm(ctx, request.params.id);
+      return sendSuccess(reply, order);
     },
-  }, async (request, reply) => {
-    const ctx = createContext(request);
-    const order = await controller.process(ctx, request.params.id);
-    sendSuccess(reply, order);
-  });
+  );
 
-  typed.post('/:id/fulfil', {
-    preHandler: readGuard,
-    schema: {
-      tags: ['Orders'],
-      summary: 'Mark an order as fulfilled',
-      security: [{ bearerAuth: [] }],
-      params: idParamsSchema,
+  typed.post(
+    '/:id/process',
+    {
+      preHandler: readGuard,
+      schema: {
+        tags: ['Orders'],
+        summary: 'Move an order to processing',
+        security: [{ bearerAuth: [] }],
+        params: idParamsSchema,
+      },
     },
-  }, async (request, reply) => {
-    const ctx = createContext(request);
-    const order = await controller.fulfil(ctx, request.params.id);
-    sendSuccess(reply, order);
-  });
-
-  typed.post('/:id/cancel', {
-    preHandler: managerGuard,
-    schema: {
-      tags: ['Orders'],
-      summary: 'Cancel an order (restores stock if previously confirmed)',
-      security: [{ bearerAuth: [] }],
-      params: idParamsSchema,
+    async (request, reply) => {
+      const ctx = createContext(request);
+      const order = await controller.process(ctx, request.params.id);
+      return sendSuccess(reply, order);
     },
-  }, async (request, reply) => {
-    const ctx = createContext(request);
-    const order = await controller.cancel(ctx, request.params.id);
-    sendSuccess(reply, order);
-  });
+  );
 
-  // ─── POS receipt ──────────────────────────────────────────────────────────
-
-  typed.post('/:id/receipt', {
-    preHandler: readGuard,
-    schema: {
-      tags: ['Orders'],
-      summary: 'Generate and deliver a receipt for an order (POS manual trigger)',
-      description:
-        'Renders a receipt PDF and delivers it via the requested channel(s). ' +
-        '"print" returns the pdfUrl for the client to open/print. ' +
-        '"email" sends to the customer email on file. ' +
-        '"whatsapp" sends a WhatsApp message with a download link.',
-      security: [{ bearerAuth: [] }],
-      params: idParamsSchema,
-      body: receiptBodySchema,
+  typed.post(
+    '/:id/fulfil',
+    {
+      preHandler: readGuard,
+      schema: {
+        tags: ['Orders'],
+        summary: 'Mark an order as fulfilled',
+        security: [{ bearerAuth: [] }],
+        params: idParamsSchema,
+      },
     },
-  }, async (request, reply) => {
-    const ctx = createContext(request);
-    const result = await controller.receipt(ctx, request.params.id, request.body.channels ?? ['print']);
-    sendSuccess(reply, result);
-  });
+    async (request, reply) => {
+      const ctx = createContext(request);
+      const order = await controller.fulfil(ctx, request.params.id);
+      return sendSuccess(reply, order);
+    },
+  );
+
+  typed.post(
+    '/:id/cancel',
+    {
+      preHandler: managerGuard,
+      schema: {
+        tags: ['Orders'],
+        summary: 'Cancel an order (restores stock if previously confirmed)',
+        security: [{ bearerAuth: [] }],
+        params: idParamsSchema,
+      },
+    },
+    async (request, reply) => {
+      const ctx = createContext(request);
+      const order = await controller.cancel(ctx, request.params.id);
+      return sendSuccess(reply, order);
+    },
+  );
 }
