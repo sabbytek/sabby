@@ -1,11 +1,6 @@
-/**
- * Health check utilities.
- * Checks database, Redis, and BullMQ queue status.
- */
-
 import { sql } from 'drizzle-orm';
 import { getDb } from '../db/client.js';
-import { cache } from '../cache/client.js';
+import { cache, isRedisAvailable } from '../cache/client.js';
 import { env } from '../../config/env.js';
 
 export interface HealthCheckResult {
@@ -26,18 +21,29 @@ export interface ComponentCheck {
   message?: string;
 }
 
-/**
- * Check database connectivity by running a simple query.
- */
+const CHECK_TIMEOUT_MS = 4000;
+
+async function withTimeout<T>(label: string, promise: Promise<T>): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label} check timed out after ${CHECK_TIMEOUT_MS}ms`)),
+      CHECK_TIMEOUT_MS,
+    );
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function checkDatabase(): Promise<ComponentCheck> {
   const start = Date.now();
   try {
     const db = getDb();
-    await db.execute(sql`SELECT 1`);
-    return {
-      status: 'ok',
-      latencyMs: Date.now() - start,
-    };
+    await withTimeout('database', db.execute(sql`SELECT 1`));
+    return { status: 'ok', latencyMs: Date.now() - start };
   } catch (err) {
     return {
       status: 'error',
@@ -47,54 +53,19 @@ async function checkDatabase(): Promise<ComponentCheck> {
   }
 }
 
-/**
- * Resolve once the lazy cache client is ready to accept commands, whatever
- * connection state it is currently in. `connect()` only accepts a fresh client
- * (status 'wait'/'end'); if it is already mid-connect we wait for the 'ready'
- * event instead of racing a command onto an unwritable socket.
- */
-async function ensureCacheReady(): Promise<void> {
-  if (cache.status === 'ready') return;
-  if (cache.status === 'wait' || cache.status === 'end') {
-    await cache.connect();
-    return;
-  }
-  await new Promise<void>((resolve, reject) => {
-    const onReady = (): void => {
-      cleanup();
-      resolve();
-    };
-    const onError = (err: Error): void => {
-      cleanup();
-      reject(err);
-    };
-    const cleanup = (): void => {
-      cache.off('ready', onReady);
-      cache.off('error', onError);
-    };
-    cache.once('ready', onReady);
-    cache.once('error', onError);
-  });
-}
-
-/**
- * Check Redis connectivity by pinging.
- */
 async function checkRedis(): Promise<ComponentCheck> {
   const start = Date.now();
+  // If the connection attempt already failed (DNS error, deleted instance, etc.)
+  // report the error immediately without issuing a command that would hang.
+  if (!isRedisAvailable()) {
+    return { status: 'error', message: 'Redis unavailable — check REDIS_URL secret on Fly.io' };
+  }
   try {
-    // The cache client is lazyConnect with enableOfflineQueue disabled, so a
-    // ping issued before the socket is ready is rejected outright ("Stream
-    // isn't writeable"). Ensure the connection is ready first — this makes the
-    // very first health probe after boot accurate instead of falsely degraded.
-    await ensureCacheReady();
-    const pong = await cache.ping();
+    const pong = await withTimeout('redis', cache.ping());
     const latencyMs = Date.now() - start;
-    const isHealthy = pong === 'PONG';
-    if (isHealthy) {
-      return { status: 'ok', latencyMs };
-    }
-    return { status: 'error', latencyMs, message: `Unexpected response: ${String(pong)}` };
+    return pong === 'PONG'
+      ? { status: 'ok', latencyMs }
+      : { status: 'error', latencyMs, message: `Unexpected response: ${String(pong)}` };
   } catch (err) {
     return {
       status: 'error',
@@ -104,53 +75,36 @@ async function checkRedis(): Promise<ComponentCheck> {
   }
 }
 
-/**
- * Check queue status by fetching job counts from all queues.
- */
 async function checkQueues(): Promise<ComponentCheck> {
+  if (!isRedisAvailable()) {
+    return { status: 'error', message: 'Queues unavailable — Redis unreachable' };
+  }
   const start = Date.now();
   try {
-    // Dynamic import to avoid circular dependencies
-    const {
-      notificationsQueue,
-      documentsQueue,
-      paymentsQueue,
-      subscriptionsQueue,
-      logisticsQueue,
-    } = await import('../queue/client.js');
+    const { notificationsQueue, documentsQueue, paymentsQueue, subscriptionsQueue, logisticsQueue } =
+      await import('../queue/client.js');
 
-    const queues = [
-      notificationsQueue,
-      documentsQueue,
-      paymentsQueue,
-      subscriptionsQueue,
-      logisticsQueue,
-    ];
+    const queues = [notificationsQueue, documentsQueue, paymentsQueue, subscriptionsQueue, logisticsQueue];
     const results = await Promise.allSettled(
-      queues.map(async (q) => {
-        const counts = await q.getJobCounts('waiting', 'active', 'completed', 'failed');
-        return { name: q.name, counts };
-      }),
+      queues.map((q) => q.getJobCounts('waiting', 'active', 'completed', 'failed')),
     );
 
+    const hasErrors = results.some((r) => r.status === 'rejected');
     let failed = 0;
-    let totalWaiting = 0;
-
+    let waiting = 0;
     for (const r of results) {
       if (r.status === 'fulfilled') {
-        failed += r.value.counts['failed'] ?? 0;
-        totalWaiting += r.value.counts['waiting'] ?? 0;
+        failed += r.value['failed'] ?? 0;
+        waiting += r.value['waiting'] ?? 0;
       }
     }
-
-    const hasErrors = results.some((r) => r.status === 'rejected');
 
     return {
       status: hasErrors ? 'error' : 'ok',
       latencyMs: Date.now() - start,
       message: hasErrors
         ? 'Some queues unreachable'
-        : `${String(queues.length)} queues, ${String(totalWaiting)} waiting, ${String(failed)} failed`,
+        : `${String(queues.length)} queues, ${String(waiting)} waiting, ${String(failed)} failed`,
     };
   } catch (err) {
     return {
@@ -161,9 +115,6 @@ async function checkQueues(): Promise<ComponentCheck> {
   }
 }
 
-/**
- * Run all health checks and return aggregated status.
- */
 export async function runHealthChecks(): Promise<HealthCheckResult> {
   const [database, redis, queues] = await Promise.all([
     checkDatabase(),
@@ -172,12 +123,9 @@ export async function runHealthChecks(): Promise<HealthCheckResult> {
   ]);
 
   const checks = { database, redis, queues };
-  const statuses = Object.values(checks).map((c) => c.status);
-
-  let overallStatus: HealthCheckResult['status'] = 'ok';
-  if (statuses.includes('error')) {
-    overallStatus = statuses.filter((s) => s === 'error').length >= 2 ? 'error' : 'degraded';
-  }
+  const errorCount = Object.values(checks).filter((c) => c.status === 'error').length;
+  const overallStatus: HealthCheckResult['status'] =
+    errorCount === 0 ? 'ok' : errorCount >= 2 ? 'error' : 'degraded';
 
   return {
     status: overallStatus,

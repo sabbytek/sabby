@@ -1,16 +1,20 @@
 import { Queue, Worker, type Processor, type ConnectionOptions } from 'bullmq';
 import { env } from '../../config/env.js';
 
-// Parse Redis URL for BullMQ connection options
-// BullMQ uses Redis DB 1 to keep queue data separate from cache
 function getRedisConnection(): ConnectionOptions {
   const url = new URL(env.REDIS_URL);
   return {
     host: url.hostname,
     port: parseInt(url.port || '6379'),
     password: url.password || undefined,
+    username: url.username || undefined,
     db: 1,
     maxRetriesPerRequest: null, // Required for BullMQ
+    // Mirror the cache client's retry cap so a dead Redis host doesn't keep
+    // the process alive with infinite reconnect attempts.
+    retryStrategy: (times: number) => (times > 10 ? null : Math.min(times * 200, 3000)),
+    enableOfflineQueue: false,
+    lazyConnect: true,
   };
 }
 
