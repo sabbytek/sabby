@@ -1,5 +1,6 @@
 import argon2 from 'argon2';
 import { v4 as uuidv4 } from 'uuid';
+import { randomBytes } from 'node:crypto';
 import { eq, and, gt, isNull } from 'drizzle-orm';
 import { db } from '../../shared/db/client.js';
 import { refreshTokens, passwordResetTokens } from '../../shared/db/schema/public.js';
@@ -8,6 +9,9 @@ import { users } from '../../shared/db/schema/tenant.js';
 import { UnauthorizedError, NotFoundError } from '../../shared/errors/types.js';
 import type { UserRole, JwtPayload } from '../../shared/types/index.js';
 import type { FastifyInstance } from 'fastify';
+
+const TOKEN_PREFIX_LENGTH = 16;
+const RESET_TOKEN_BYTES = 32; // 32 bytes = 64 hex chars
 
 export interface LoginResult {
   accessToken: string;
@@ -49,7 +53,7 @@ export async function loginUser(
   const payload: JwtPayload = {
     sub: user.id,
     tid: tenantId,
-    role: user.role as UserRole,
+    role: user.role,
     email: user.email,
     type: 'access',
   };
@@ -57,6 +61,7 @@ export async function loginUser(
   const accessToken = app.jwt.sign(payload);
   const rawRefreshToken = uuidv4();
   const tokenHash = await argon2.hash(rawRefreshToken);
+  const tokenPrefix = rawRefreshToken.slice(0, TOKEN_PREFIX_LENGTH);
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
   await db.insert(refreshTokens).values({
@@ -64,15 +69,13 @@ export async function loginUser(
     tenantId,
     userId: user.id,
     tokenHash,
+    tokenPrefix,
     expiresAt,
   });
 
   // Update last login
   await withTenantSchema(schemaName, async (tenantDb) => {
-    await tenantDb
-      .update(users)
-      .set({ lastLoginAt: new Date() })
-      .where(eq(users.id, user.id));
+    await tenantDb.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
   });
 
   return {
@@ -83,7 +86,7 @@ export async function loginUser(
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
-      role: user.role as UserRole,
+      role: user.role,
     },
   };
 }
@@ -129,28 +132,27 @@ export async function refreshAccessToken(
   rawRefreshToken: string,
 ): Promise<string> {
   const now = new Date();
+  const tokenPrefix = rawRefreshToken.slice(0, TOKEN_PREFIX_LENGTH);
 
-  const pendingTokens = await db
+  const [matched] = await db
     .select()
     .from(refreshTokens)
     .where(
       and(
         eq(refreshTokens.tenantId, tenantId),
+        eq(refreshTokens.tokenPrefix, tokenPrefix),
         gt(refreshTokens.expiresAt, now),
         isNull(refreshTokens.revokedAt),
       ),
-    );
-
-  let matched: (typeof pendingTokens)[number] | undefined;
-  for (const token of pendingTokens) {
-    const valid = await argon2.verify(token.tokenHash, rawRefreshToken);
-    if (valid) {
-      matched = token;
-      break;
-    }
-  }
+    )
+    .limit(1);
 
   if (!matched) {
+    throw new UnauthorizedError('Invalid or expired refresh token');
+  }
+
+  const valid = await argon2.verify(matched.tokenHash, rawRefreshToken);
+  if (!valid) {
     throw new UnauthorizedError('Invalid or expired refresh token');
   }
 
@@ -158,7 +160,7 @@ export async function refreshAccessToken(
     const [found] = await tenantDb
       .select()
       .from(users)
-      .where(and(eq(users.id, matched!.userId), eq(users.isActive, true)))
+      .where(and(eq(users.id, matched.userId), eq(users.isActive, true)))
       .limit(1);
     return found;
   });
@@ -170,7 +172,7 @@ export async function refreshAccessToken(
   const payload: JwtPayload = {
     sub: user.id,
     tid: tenantId,
-    role: user.role as UserRole,
+    role: user.role,
     email: user.email,
     type: 'access',
   };
@@ -178,25 +180,34 @@ export async function refreshAccessToken(
   return app.jwt.sign(payload);
 }
 
-export async function revokeRefreshToken(
-  tenantId: string,
-  rawRefreshToken: string,
-): Promise<void> {
-  const pendingTokens = await db
+export async function revokeRefreshToken(tenantId: string, rawRefreshToken: string): Promise<void> {
+  const tokenPrefix = rawRefreshToken.slice(0, TOKEN_PREFIX_LENGTH);
+
+  const [matched] = await db
     .select()
     .from(refreshTokens)
-    .where(and(eq(refreshTokens.tenantId, tenantId), isNull(refreshTokens.revokedAt)));
+    .where(
+      and(
+        eq(refreshTokens.tenantId, tenantId),
+        eq(refreshTokens.tokenPrefix, tokenPrefix),
+        isNull(refreshTokens.revokedAt),
+      ),
+    )
+    .limit(1);
 
-  for (const token of pendingTokens) {
-    const valid = await argon2.verify(token.tokenHash, rawRefreshToken);
-    if (valid) {
-      await db
-        .update(refreshTokens)
-        .set({ revokedAt: new Date() })
-        .where(eq(refreshTokens.id, token.id));
-      return;
-    }
+  if (!matched) {
+    return; // Token not found or already revoked
   }
+
+  const valid = await argon2.verify(matched.tokenHash, rawRefreshToken);
+  if (!valid) {
+    return; // Token doesn't match
+  }
+
+  await db
+    .update(refreshTokens)
+    .set({ revokedAt: new Date() })
+    .where(eq(refreshTokens.id, matched.id));
 }
 
 // ─── Password Reset ──────────────────────────────────────────────────────────
@@ -240,8 +251,9 @@ export async function requestPasswordReset(
     );
 
   // Generate a cryptographically secure random token
-  const rawToken = uuidv4() + uuidv4(); // 64 hex chars
+  const rawToken = randomBytes(RESET_TOKEN_BYTES).toString('hex'); // 64 hex chars
   const tokenHash = await argon2.hash(rawToken);
+  const tokenPrefix = rawToken.slice(0, TOKEN_PREFIX_LENGTH);
   const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_MS);
 
   await db.insert(passwordResetTokens).values({
@@ -249,6 +261,7 @@ export async function requestPasswordReset(
     tenantId,
     userId: user.id,
     tokenHash,
+    tokenPrefix,
     expiresAt,
   });
 
@@ -266,29 +279,28 @@ export async function resetPassword(
   newPassword: string,
 ): Promise<void> {
   const now = new Date();
+  const tokenPrefix = rawToken.slice(0, TOKEN_PREFIX_LENGTH);
 
-  // Find all non-used, non-expired tokens for this tenant
-  const pendingTokens = await db
+  // Find the exact token using tokenPrefix
+  const [matched] = await db
     .select()
     .from(passwordResetTokens)
     .where(
       and(
         eq(passwordResetTokens.tenantId, tenantId),
+        eq(passwordResetTokens.tokenPrefix, tokenPrefix),
         gt(passwordResetTokens.expiresAt, now),
         isNull(passwordResetTokens.usedAt),
       ),
-    );
-
-  let matched: (typeof pendingTokens)[number] | undefined;
-  for (const token of pendingTokens) {
-    const valid = await argon2.verify(token.tokenHash, rawToken);
-    if (valid) {
-      matched = token;
-      break;
-    }
-  }
+    )
+    .limit(1);
 
   if (!matched) {
+    throw new UnauthorizedError('Invalid or expired reset token');
+  }
+
+  const valid = await argon2.verify(matched.tokenHash, rawToken);
+  if (!valid) {
     throw new UnauthorizedError('Invalid or expired reset token');
   }
 
@@ -305,11 +317,11 @@ export async function resetPassword(
     const [updated] = await tenantDb
       .update(users)
       .set({ passwordHash, updatedAt: new Date() })
-      .where(eq(users.id, matched!.userId))
+      .where(eq(users.id, matched.userId))
       .returning({ id: users.id });
 
     if (!updated) {
-      throw new NotFoundError('User', matched!.userId);
+      throw new NotFoundError('User', matched.userId);
     }
   });
 
