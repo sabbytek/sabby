@@ -115,7 +115,7 @@ export function buildApp() {
   // Root liveness probe — unauthenticated, not in swagger
   app.get('/', { schema: { hide: true } }, (_request, reply) => {
     return reply.send({
-      app: 'Sabby API',
+      app: 'Oniraja API',
       status: 'ok',
       timestamp: new Date().toISOString(),
       environment: env.NODE_ENV,
