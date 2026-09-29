@@ -93,22 +93,17 @@ export function buildApp() {
     }),
   });
 
-  // Platform ops plane JWT — a SEPARATE audience with its own secret, so a
-  // tenant token can never be replayed against a platform route (and vice
-  // versa). Decorates app.jwt.platform.sign and request.platformJwtVerify.
-  void app.register(jwtPlugin, {
-    namespace: 'platform',
-    secret: env.PLATFORM_JWT_ACCESS_SECRET,
-    sign: {
-      expiresIn: env.PLATFORM_JWT_ACCESS_EXPIRY,
-      aud: 'sabby-platform',
-      iss: 'sabby-platform',
-    },
-    verify: { allowedAud: 'sabby-platform', allowedIss: 'sabby-platform' },
-    jwtVerify: 'platformJwtVerify',
-    jwtSign: 'platformJwtSign',
-    decoratorName: 'platformTokenPayload',
-  });
+  // Platform JWT — only registered when the secret is configured.
+  // When unset the /v1/platform plane is also left unregistered (see below).
+  if (env.JWT_PLATFORM_SECRET) {
+    void app.register(jwtPlugin, {
+      namespace: 'platform',
+      secret: env.JWT_PLATFORM_SECRET,
+      jwtVerify: 'platformJwtVerify',
+      jwtSign: 'platformJwtSign',
+      sign: { expiresIn: env.JWT_PLATFORM_ACCESS_EXPIRY },
+    });
+  }
 
   registerRequestId(app);
 

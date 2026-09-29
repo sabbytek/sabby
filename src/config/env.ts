@@ -26,27 +26,11 @@ const envSchema = z.object({
   JWT_ACCESS_EXPIRY: z.string().default('15m'),
   JWT_REFRESH_EXPIRY: z.string().default('7d'),
 
-  // Platform ops plane JWT — a SEPARATE audience from tenant tokens, with its
-  // own secrets so a tenant token can never be replayed against a platform
-  // route and vice versa. See sabby-admin/docs/ADMIN-DASHBOARD-PLAN.md.
-  PLATFORM_JWT_ACCESS_SECRET: z
-    .string()
-    .min(32)
-    .refine(
-      (val) => !val.startsWith('replace-with-'),
-      'PLATFORM_JWT_ACCESS_SECRET cannot use placeholder value',
-    ),
-  PLATFORM_JWT_REFRESH_SECRET: z
-    .string()
-    .min(32)
-    .refine(
-      (val) => !val.startsWith('replace-with-'),
-      'PLATFORM_JWT_REFRESH_SECRET cannot use placeholder value',
-    ),
-  PLATFORM_JWT_ACCESS_EXPIRY: z.string().default('15m'),
-  PLATFORM_JWT_REFRESH_EXPIRY: z.string().default('7d'),
-  // Label shown in authenticator apps when a platform user enrols MFA.
-  PLATFORM_MFA_ISSUER: z.string().default('Sabby Ops'),
+  // Platform (internal admin plane) JWT — optional so dev/test boot without it.
+  // When unset the entire /v1/platform plane is left unregistered.
+  JWT_PLATFORM_SECRET: z.string().min(32).optional(),
+  JWT_PLATFORM_ACCESS_EXPIRY: z.string().default('15m'),
+  JWT_PLATFORM_REFRESH_EXPIRY: z.string().default('8h'),
 
   // Redis
   REDIS_URL: z.string().default('redis://localhost:6379'),

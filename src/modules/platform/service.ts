@@ -262,7 +262,7 @@ export async function beginMfaEnrollment(
     .set({ mfaSecretEncrypted: encrypt(secret), updatedAt: new Date() })
     .where(eq(platformUsers.id, userId));
 
-  return { secret, otpauthUri: buildOtpauthUri(secret, user.email, env.PLATFORM_MFA_ISSUER) };
+  return { secret, otpauthUri: buildOtpauthUri(secret, user.email, 'Sabby Ops') };
 }
 
 /** Confirms enrollment: verifies a code against the pending secret and enables MFA. */
