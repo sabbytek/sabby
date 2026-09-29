@@ -50,13 +50,18 @@ describe('assertTransition', () => {
   });
 
   it('throws ValidationError on invalid transition', () => {
-    expect(() => assertTransition('trial', 'lapsed')).toThrow('Invalid subscription status transition');
-    expect(() => assertTransition('cancelled', 'active')).toThrow('Invalid subscription status transition');
-    expect(() => assertTransition('active', 'trial')).toThrow('Invalid subscription status transition');
+    expect(() => assertTransition('trial', 'lapsed')).toThrow(
+      'Invalid subscription status transition',
+    );
+    expect(() => assertTransition('cancelled', 'active')).toThrow(
+      'Invalid subscription status transition',
+    );
+    expect(() => assertTransition('active', 'trial')).toThrow(
+      'Invalid subscription status transition',
+    );
   });
 
   it('error message contains from and to states', () => {
-    expect(() => assertTransition('cancelled', 'active'))
-      .toThrow(/cancelled.*active/);
+    expect(() => assertTransition('cancelled', 'active')).toThrow(/cancelled.*active/);
   });
 });

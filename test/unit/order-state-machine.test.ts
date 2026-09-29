@@ -79,7 +79,12 @@ describe('Order state machine', () => {
     it('terminal states have no valid outgoing transitions', () => {
       const terminalStates: OrderStatus[] = ['cancelled', 'refunded'];
       const allStatuses: OrderStatus[] = [
-        'draft', 'confirmed', 'processing', 'fulfilled', 'cancelled', 'refunded',
+        'draft',
+        'confirmed',
+        'processing',
+        'fulfilled',
+        'cancelled',
+        'refunded',
       ];
       for (const from of terminalStates) {
         for (const to of allStatuses) {

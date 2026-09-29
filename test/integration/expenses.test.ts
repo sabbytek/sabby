@@ -20,7 +20,9 @@ vi.mock('../../src/modules/expenses/service.js', () => {
 
   return {
     createExpense: vi.fn().mockResolvedValue(expense),
-    listExpenses: vi.fn().mockResolvedValue({ items: [expense], total: 1, page: 1, limit: 20, totalPages: 1 }),
+    listExpenses: vi
+      .fn()
+      .mockResolvedValue({ items: [expense], total: 1, page: 1, limit: 20, totalPages: 1 }),
     getExpense: vi.fn().mockResolvedValue(expense),
   };
 });

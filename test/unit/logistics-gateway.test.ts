@@ -46,34 +46,30 @@ describe('genericDispatchGateway.validateWebhookSignature', () => {
   }
 
   it('returns true for a valid HMAC signature', async () => {
-    const { genericDispatchGateway } = await import(
-      '../../src/modules/dispatch/providers/generic.js'
-    );
+    const { genericDispatchGateway } =
+      await import('../../src/modules/dispatch/providers/generic.js');
     const sig = makeSignature(body, secret);
     expect(genericDispatchGateway.validateWebhookSignature(body, sig, secret)).toBe(true);
   });
 
   it('returns false for a tampered body', async () => {
-    const { genericDispatchGateway } = await import(
-      '../../src/modules/dispatch/providers/generic.js'
-    );
+    const { genericDispatchGateway } =
+      await import('../../src/modules/dispatch/providers/generic.js');
     const sig = makeSignature(body, secret);
     const tamperedBody = Buffer.from(JSON.stringify({ eventType: 'shipment.cancelled' }));
     expect(genericDispatchGateway.validateWebhookSignature(tamperedBody, sig, secret)).toBe(false);
   });
 
   it('returns false for a wrong secret', async () => {
-    const { genericDispatchGateway } = await import(
-      '../../src/modules/dispatch/providers/generic.js'
-    );
+    const { genericDispatchGateway } =
+      await import('../../src/modules/dispatch/providers/generic.js');
     const sig = makeSignature(body, 'wrong_secret');
     expect(genericDispatchGateway.validateWebhookSignature(body, sig, secret)).toBe(false);
   });
 
   it('returns false for a mismatched length signature (no panic)', async () => {
-    const { genericDispatchGateway } = await import(
-      '../../src/modules/dispatch/providers/generic.js'
-    );
+    const { genericDispatchGateway } =
+      await import('../../src/modules/dispatch/providers/generic.js');
     expect(genericDispatchGateway.validateWebhookSignature(body, 'short', secret)).toBe(false);
   });
 });
@@ -144,9 +140,7 @@ describe('eventTypeToDispatchStatus', () => {
 
 describe('deliveryFeeCollectedTemplate', () => {
   it('debits Cash and credits Revenue', async () => {
-    const { deliveryFeeCollectedTemplate } = await import(
-      '../../src/modules/ledger/templates.js'
-    );
+    const { deliveryFeeCollectedTemplate } = await import('../../src/modules/ledger/templates.js');
     const draft = deliveryFeeCollectedTemplate('order-1', 50000);
     const debit = draft.lines.find((l) => l.type === 'debit');
     const credit = draft.lines.find((l) => l.type === 'credit');
@@ -156,9 +150,7 @@ describe('deliveryFeeCollectedTemplate', () => {
   });
 
   it('produces a balanced entry', async () => {
-    const { deliveryFeeCollectedTemplate } = await import(
-      '../../src/modules/ledger/templates.js'
-    );
+    const { deliveryFeeCollectedTemplate } = await import('../../src/modules/ledger/templates.js');
     const { lines } = deliveryFeeCollectedTemplate('order-1', 30000);
     const debits = lines.filter((l) => l.type === 'debit').reduce((s, l) => s + l.amountKobo, 0);
     const credits = lines.filter((l) => l.type === 'credit').reduce((s, l) => s + l.amountKobo, 0);

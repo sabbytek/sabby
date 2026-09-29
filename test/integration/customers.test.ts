@@ -23,7 +23,9 @@ vi.mock('../../src/modules/customers/service.js', () => {
 
   return {
     createCustomer: vi.fn().mockResolvedValue(customer),
-    listCustomers: vi.fn().mockResolvedValue({ items: [customer], total: 1, page: 1, limit: 20, totalPages: 1 }),
+    listCustomers: vi
+      .fn()
+      .mockResolvedValue({ items: [customer], total: 1, page: 1, limit: 20, totalPages: 1 }),
     getCustomer: vi.fn().mockResolvedValue(customer),
     updateCustomer: vi.fn().mockResolvedValue({ ...customer, firstName: 'Jane' }),
   };

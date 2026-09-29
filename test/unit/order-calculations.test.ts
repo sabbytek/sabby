@@ -3,9 +3,7 @@ import { calculateOrderTotals } from '../../src/modules/orders/calculations.js';
 
 describe('calculateOrderTotals', () => {
   it('single item with no discount or tax', () => {
-    const result = calculateOrderTotals([
-      { quantity: 2, unitPriceKobo: 50000 },
-    ]);
+    const result = calculateOrderTotals([{ quantity: 2, unitPriceKobo: 50000 }]);
     expect(result.lineTotalsKobo[0]).toBe(100000);
     expect(result.subtotalKobo).toBe(100000);
     expect(result.totalKobo).toBe(100000);
@@ -57,9 +55,7 @@ describe('calculateOrderTotals', () => {
   });
 
   it('clamps negative line totals to zero', () => {
-    const result = calculateOrderTotals([
-      { quantity: 1, unitPriceKobo: 1000, discountKobo: 5000 },
-    ]);
+    const result = calculateOrderTotals([{ quantity: 1, unitPriceKobo: 1000, discountKobo: 5000 }]);
     expect(result.lineTotalsKobo[0]).toBe(0);
     expect(result.subtotalKobo).toBe(0);
   });
@@ -74,9 +70,7 @@ describe('calculateOrderTotals', () => {
   });
 
   it('all arithmetic stays integer (no floats)', () => {
-    const result = calculateOrderTotals([
-      { quantity: 3, unitPriceKobo: 33333 },
-    ]);
+    const result = calculateOrderTotals([{ quantity: 3, unitPriceKobo: 33333 }]);
     // 3 × 33333 = 99999
     expect(result.subtotalKobo).toBe(99999);
     expect(Number.isInteger(result.subtotalKobo)).toBe(true);

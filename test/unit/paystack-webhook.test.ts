@@ -18,7 +18,10 @@ function validateSignature(rawBody: string, signature: string, secret: string): 
 }
 
 const SECRET = 'sk_test_supersecret1234567890abcdef';
-const PAYLOAD = JSON.stringify({ event: 'charge.success', data: { id: 'evt-001', reference: 'bpos-xyz', amount: 100000 } });
+const PAYLOAD = JSON.stringify({
+  event: 'charge.success',
+  data: { id: 'evt-001', reference: 'bpos-xyz', amount: 100000 },
+});
 
 describe('Paystack webhook signature verification', () => {
   it('accepts a valid signature', () => {
