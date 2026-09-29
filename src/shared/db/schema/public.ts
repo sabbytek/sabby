@@ -56,6 +56,7 @@ export const refreshTokens = pgTable(
       .references(() => tenants.id, { onDelete: 'cascade' }),
     userId: text('user_id').notNull(),
     tokenHash: text('token_hash').notNull(),
+    tokenPrefix: text('token_prefix').notNull(), // First 16 chars of raw token for O(1) lookup
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
@@ -63,6 +64,7 @@ export const refreshTokens = pgTable(
   (table) => ({
     tenantUserIdx: index('refresh_tokens_tenant_user_idx').on(table.tenantId, table.userId),
     expiryIdx: index('refresh_tokens_expiry_idx').on(table.expiresAt),
+    prefixIdx: index('refresh_tokens_prefix_idx').on(table.tokenPrefix),
   }),
 );
 
@@ -100,6 +102,7 @@ export const passwordResetTokens = pgTable(
       .references(() => tenants.id, { onDelete: 'cascade' }),
     userId: text('user_id').notNull(),
     tokenHash: text('token_hash').notNull(), // argon2 hash of the raw token
+    tokenPrefix: text('token_prefix').notNull(), // First 16 chars of raw token for O(1) lookup
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     usedAt: timestamp('used_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -107,87 +110,118 @@ export const passwordResetTokens = pgTable(
   (table) => ({
     tenantUserIdx: index('password_reset_tokens_tenant_user_idx').on(table.tenantId, table.userId),
     expiryIdx: index('password_reset_tokens_expiry_idx').on(table.expiresAt),
+    prefixIdx: index('password_reset_tokens_prefix_idx').on(table.tokenPrefix),
   }),
 );
 
-// ─── Platform operations plane ────────────────────────────────────────────────
-// Cross-tenant staff (support, admin, super-admin) who operate the platform.
-// These identities are NOT tenants and carry no tenant scope. Everything here
-// lives once in the public schema. See docs/ADMIN-DASHBOARD-PLAN.md in
-// sabbytek/sabby-admin for the full design and security posture.
+// ─── Platform identity plane ─────────────────────────────────────────────────
+//
+// Internal staff (support, admins) live here — NOT in any tenant's `users`
+// table. The two identity planes are deliberately disjoint: they share no
+// table, no role enum, and no JWT secret. Folding platform roles into
+// `userRoleEnum` would mean any row in any tenant's `users` table could be
+// escalated to platform-wide power by a single UPDATE.
 
-export const platformRoleEnum = pgEnum('platform_role', ['support', 'admin', 'super_admin']);
+export const platformRoleEnum = pgEnum('platform_role', [
+  'super_admin',
+  'admin',
+  'support',
+  'read_only',
+]);
 
 export const platformUsers = pgTable(
   'platform_users',
   {
     id: text('id').primaryKey(),
+    // PII: internal staff contact details
     email: text('email').notNull(),
-    name: text('name').notNull(),
     passwordHash: text('password_hash').notNull(),
-    role: platformRoleEnum('role').notNull().default('support'),
+    firstName: text('first_name').notNull(),
+    lastName: text('last_name').notNull(),
+    role: platformRoleEnum('role').notNull().default('read_only'),
     isActive: boolean('is_active').notNull().default(true),
-    // MFA (TOTP). Secret is AES-256-GCM encrypted at rest (see shared/crypto/encrypt).
-    mfaEnabled: boolean('mfa_enabled').notNull().default(false),
+    // TOTP secret, AES-256-GCM encrypted via shared/crypto/encrypt.ts
     mfaSecretEncrypted: text('mfa_secret_encrypted'),
+    mfaEnabledAt: timestamp('mfa_enabled_at', { withTimezone: true }),
     lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [
-    uniqueIndex('platform_users_email_idx').on(table.email),
-    index('platform_users_active_idx').on(table.isActive),
-  ],
+  (table) => ({
+    emailIdx: uniqueIndex('platform_users_email_idx').on(table.email),
+    activeIdx: index('platform_users_active_idx').on(table.isActive),
+  }),
 );
 
-export const platformRefreshTokens = pgTable(
-  'platform_refresh_tokens',
+export const platformSessions = pgTable(
+  'platform_sessions',
   {
     id: text('id').primaryKey(),
     platformUserId: text('platform_user_id')
       .notNull()
       .references(() => platformUsers.id, { onDelete: 'cascade' }),
-    tokenHash: text('token_hash').notNull(), // argon2 hash of the raw refresh token
+    tokenHash: text('token_hash').notNull(),
+    // First 16 chars of the raw token — bounds the argon2 verify scan to ~1 row
+    tokenPrefix: text('token_prefix').notNull(),
+    ipAddress: text('ip_address'),
+    userAgent: text('user_agent'),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [
-    index('platform_refresh_tokens_user_idx').on(table.platformUserId),
-    index('platform_refresh_tokens_expiry_idx').on(table.expiresAt),
-  ],
+  (table) => ({
+    userIdx: index('platform_sessions_user_idx').on(table.platformUserId),
+    prefixIdx: index('platform_sessions_prefix_idx').on(table.tokenPrefix),
+    expiryIdx: index('platform_sessions_expiry_idx').on(table.expiresAt),
+  }),
 );
 
-// Append-only record of every state-changing or PII-revealing platform action.
-// Rows are never updated or deleted in application code.
+/**
+ * Append-only record of every platform-plane action.
+ *
+ * Written explicitly from platform controllers via writeAudit() rather than
+ * by an automatic hook, so a reviewer can grep the call sites and see exactly
+ * what is recorded. There is deliberately no update or delete path.
+ */
 export const platformAuditLog = pgTable(
   'platform_audit_log',
   {
     id: text('id').primaryKey(),
-    actorId: text('actor_id'), // null for system/unauthenticated events (e.g. failed login)
+    actorId: text('actor_id').notNull(),
     actorEmail: text('actor_email').notNull(),
-    action: text('action').notNull(), // e.g. 'auth.login', 'tenant.suspend'
-    targetType: text('target_type'), // e.g. 'tenant', 'platform_user'
+    actorRole: text('actor_role').notNull(),
+    action: text('action').notNull(), // e.g. 'tenant.suspend'
+    targetType: text('target_type'), // 'tenant' | 'platform_user' | ...
     targetId: text('target_id'),
-    summary: text('summary'),
-    before: jsonb('before'),
-    after: jsonb('after'),
-    ip: text('ip'),
+    tenantId: text('tenant_id'), // set when the action concerns a tenant
+    reason: text('reason'),
+    ipAddress: text('ip_address'),
+    userAgent: text('user_agent'),
     requestId: text('request_id'),
+    metadata: jsonb('metadata'), // before/after diff, extra context
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [
-    index('platform_audit_log_actor_idx').on(table.actorId),
-    index('platform_audit_log_action_idx').on(table.action),
-    index('platform_audit_log_target_idx').on(table.targetType, table.targetId),
-    index('platform_audit_log_created_idx').on(table.createdAt),
-  ],
+  (table) => ({
+    actorIdx: index('platform_audit_actor_idx').on(table.actorId),
+    tenantIdx: index('platform_audit_tenant_idx').on(table.tenantId),
+    actionIdx: index('platform_audit_action_idx').on(table.action),
+    createdIdx: index('platform_audit_created_idx').on(table.createdAt),
+  }),
 );
 
-// Time-boxed, consented, audited access grants for support to inspect a tenant.
-// Defined now for the schema; consumed by the support-access feature (Phase 3).
-export const supportAccessGrants = pgTable(
-  'support_access_grants',
+export const grantScopeEnum = pgEnum('grant_scope', ['read', 'write']);
+
+/**
+ * Time-boxed, reason-required authorisation for a platform user to reach into
+ * ONE tenant's data.
+ *
+ * Cross-tenant reach is deliberately not implied by holding a platform
+ * identity: a support agent must open a grant, state why, and it expires. The
+ * merchant sees every grant in their own audit_log and is notified when one
+ * opens.
+ */
+export const tenantAccessGrants = pgTable(
+  'tenant_access_grants',
   {
     id: text('id').primaryKey(),
     platformUserId: text('platform_user_id')
@@ -196,18 +230,22 @@ export const supportAccessGrants = pgTable(
     tenantId: text('tenant_id')
       .notNull()
       .references(() => tenants.id, { onDelete: 'cascade' }),
+    scope: grantScopeEnum('scope').notNull().default('read'),
+    // Not nullable: an unexplained grant is not defensible after the fact.
     reason: text('reason').notNull(),
-    scope: text('scope').notNull().default('read_only'), // 'read_only' | 'break_glass'
-    grantedAt: timestamp('granted_at', { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
-    consentedBy: text('consented_by'), // tenant user id who consented; null for break-glass
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [
-    index('support_access_grants_user_idx').on(table.platformUserId),
-    index('support_access_grants_tenant_idx').on(table.tenantId),
-    index('support_access_grants_expiry_idx').on(table.expiresAt),
-  ],
+  (table) => ({
+    // The lookup requireTenantGrant does on every support request.
+    activeIdx: index('tenant_access_grants_active_idx').on(
+      table.platformUserId,
+      table.tenantId,
+      table.expiresAt,
+    ),
+    tenantIdx: index('tenant_access_grants_tenant_idx').on(table.tenantId),
+  }),
 );
 
 export type Tenant = typeof tenants.$inferSelect;
@@ -218,12 +256,11 @@ export type TenantIntegration = typeof tenantIntegrations.$inferSelect;
 export type NewTenantIntegration = typeof tenantIntegrations.$inferInsert;
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type NewPasswordResetToken = typeof passwordResetTokens.$inferInsert;
-
 export type PlatformUser = typeof platformUsers.$inferSelect;
 export type NewPlatformUser = typeof platformUsers.$inferInsert;
-export type PlatformRefreshToken = typeof platformRefreshTokens.$inferSelect;
-export type NewPlatformRefreshToken = typeof platformRefreshTokens.$inferInsert;
-export type PlatformAuditLogEntry = typeof platformAuditLog.$inferSelect;
-export type NewPlatformAuditLogEntry = typeof platformAuditLog.$inferInsert;
-export type SupportAccessGrant = typeof supportAccessGrants.$inferSelect;
-export type NewSupportAccessGrant = typeof supportAccessGrants.$inferInsert;
+export type PlatformSession = typeof platformSessions.$inferSelect;
+export type NewPlatformSession = typeof platformSessions.$inferInsert;
+export type PlatformAuditEntry = typeof platformAuditLog.$inferSelect;
+export type NewPlatformAuditEntry = typeof platformAuditLog.$inferInsert;
+export type TenantAccessGrant = typeof tenantAccessGrants.$inferSelect;
+export type NewTenantAccessGrant = typeof tenantAccessGrants.$inferInsert;

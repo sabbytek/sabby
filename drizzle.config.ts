@@ -1,4 +1,3 @@
-/// <reference types="node" />
 import type { Config } from 'drizzle-kit';
 
 // Two separate drizzle configs — public (platform) and tenant (template)
