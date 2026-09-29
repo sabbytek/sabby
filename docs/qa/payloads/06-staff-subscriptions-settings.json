@@ -1,0 +1,85 @@
+{
+  "_module": "Staff + Subscriptions + Onboarding + Settings + Uploads",
+  "_notes": [
+    "Staff is gated on staff:invite — NOT available on trial, so a trial tenant gets 402 on every /v1/staff route including the list.",
+    "Seat limits per plan: trial 1, entry 5, growth 20, enterprise unlimited.",
+    "Writes (invite, update, deactivate) need owner/manager; list and get allow any authenticated role.",
+    "Subscriptions: enterprise cannot self-serve (400 — manual billing). entry = ₦3,500 (350000 kobo), growth = ₦10,000 (1000000 kobo).",
+    "While a subscription is 'lapsed', every feature gate except subscriptions:manage returns 402."
+  ],
+
+  "staff_invite_manager": {
+    "email": "manager.qa@qa-merchant.ng",
+    "firstName": "Bola",
+    "lastName": "Ademola",
+    "role": "manager",
+    "phone": "+2348030000010",
+    "locationId": "<LOCATION_ID>",
+    "temporaryPassword": "TempStaff1!"
+  },
+  "staff_invite_staff": {
+    "email": "staff.qa@qa-merchant.ng",
+    "firstName": "Uche",
+    "lastName": "Nwosu",
+    "role": "staff",
+    "temporaryPassword": "TempStaff2!"
+  },
+  "staff_invite_viewer": {
+    "email": "viewer.qa@qa-merchant.ng",
+    "firstName": "Ngozi",
+    "lastName": "Ibe",
+    "role": "viewer",
+    "temporaryPassword": "TempStaff3!"
+  },
+  "staff_invite_duplicate_email": {
+    "email": "staff.qa@qa-merchant.ng",
+    "firstName": "Uche",
+    "lastName": "Duplicate",
+    "role": "staff",
+    "temporaryPassword": "TempStaff4!"
+  },
+  "staff_invite_invalid_role": {
+    "email": "owner2.qa@qa-merchant.ng",
+    "firstName": "Escalation",
+    "lastName": "Attempt",
+    "role": "owner",
+    "temporaryPassword": "TempStaff5!"
+  },
+  "staff_invite_weak_password": {
+    "email": "weak.qa@qa-merchant.ng",
+    "firstName": "Weak",
+    "lastName": "Password",
+    "role": "staff",
+    "temporaryPassword": "1234"
+  },
+  "staff_update_role": { "role": "manager" },
+  "staff_update_details": { "firstName": "Uchenna", "phone": "+2348030000011", "locationId": null },
+  "staff_reactivate": { "isActive": true },
+
+  "subscription_initiate_entry": { "planTier": "entry" },
+  "subscription_initiate_growth": { "planTier": "growth" },
+  "subscription_initiate_enterprise": { "planTier": "enterprise" },
+  "subscription_initiate_trial": { "planTier": "trial" },
+
+  "_no_body_endpoints": {
+    "subscription_status": "GET  /v1/subscriptions",
+    "subscription_cancel": "POST /v1/subscriptions/cancel",
+    "onboarding_checklist": "GET  /v1/onboarding",
+    "tenant_activity_trail": "GET  /v1/settings/audit"
+  },
+  "_query_examples": {
+    "settings_audit_all": "?page=1&limit=50",
+    "settings_audit_support_only": "?actorType=platform",
+    "settings_audit_by_action": "?action=order.confirm&limit=10",
+    "settings_audit_bad_actor_type": "?actorType=robot   (expect 400)"
+  },
+  "_uploads": {
+    "endpoint": "POST /v1/uploads/image  (multipart/form-data, field name: file)",
+    "allowed": ["image/jpeg", "image/png", "image/webp"],
+    "rejected": ["image/gif", "application/pdf", "image/svg+xml"],
+    "size_cap": "MAX_UPLOAD_SIZE_BYTES (default 10485760 = 10 MiB) — over the cap is 400 VALIDATION_ERROR, not 413",
+    "curl_ok": "curl -sS -X POST $BASE/v1/uploads/image -H \"authorization: Bearer $TOKEN\" -F 'file=@fixtures/product.jpg'",
+    "curl_wrong_type": "curl -sS -X POST $BASE/v1/uploads/image -H \"authorization: Bearer $TOKEN\" -F 'file=@fixtures/doc.pdf'",
+    "curl_no_file": "curl -sS -X POST $BASE/v1/uploads/image -H \"authorization: Bearer $TOKEN\" -F 'notafile=x'"
+  }
+}

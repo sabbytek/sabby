@@ -1,0 +1,114 @@
+{
+  "_module": "Shipping + Dispatch  (/v1/shipping, /v1/dispatch)",
+  "_notes": [
+    "Shipping writes need shipping:manage (all plans) plus a token; reads of zones/methods/rates need a token only.",
+    "State names must match the canonical Nigerian list from GET /v1/shipping/states exactly — 'lagos' or 'Lagos State' is rejected.",
+    "Method types: flat_rate, zone_rate, value_rate, weight_rate, automated, free, pick_up. Rate rows only apply to zone_rate, value_rate and weight_rate. Conditions only apply to free.",
+    "GET /v1/shipping/available excludes automated methods by design — those come from a live provider quote.",
+    "Dispatch is gated on logistics:dispatch (growth+) and /configure additionally needs owner/manager. The stored API key must never come back in any response."
+  ],
+
+  "zone_create": { "name": "QA Lagos Metro", "states": ["Lagos"] },
+  "zone_create_multi": { "name": "QA South West", "states": ["Lagos", "Ogun", "Oyo", "Osun", "Ondo", "Ekiti"] },
+  "zone_create_empty_states": { "name": "QA Empty", "states": [] },
+  "zone_create_invalid_state": { "name": "QA Bad State", "states": ["Wakanda"] },
+  "zone_update": { "name": "QA Lagos Metro (renamed)", "states": ["Lagos", "Ogun"] },
+
+  "method_flat_rate": {
+    "name": "QA Standard Delivery",
+    "type": "flat_rate",
+    "description": "3-5 working days anywhere in Nigeria",
+    "estimatedDaysMin": 3,
+    "estimatedDaysMax": 5,
+    "flatRateKobo": 250000,
+    "merchantCostKobo": 180000
+  },
+  "method_zone_rate": {
+    "name": "QA Zone Delivery",
+    "type": "zone_rate",
+    "estimatedDaysMin": 1,
+    "estimatedDaysMax": 3
+  },
+  "method_value_rate": { "name": "QA Value Tiers", "type": "value_rate" },
+  "method_weight_rate": { "name": "QA Weight Tiers", "type": "weight_rate" },
+  "method_free_always": { "name": "QA Free Shipping", "type": "free", "isFreeAlways": true },
+  "method_free_conditional": { "name": "QA Free Over 50k", "type": "free", "isFreeAlways": false },
+  "method_pickup": { "name": "QA Collect In Store", "type": "pick_up" },
+  "method_automated": { "name": "QA Live Courier Rates", "type": "automated" },
+  "method_bad_type": { "name": "QA Teleport", "type": "teleport" },
+  "method_update": { "flatRateKobo": 300000, "isActive": true },
+  "method_deactivate": { "isActive": false },
+
+  "rate_zone": { "zoneId": "<ZONE_ID>", "feeKobo": 150000 },
+  "rate_value_tier_low": { "feeKobo": 200000, "minOrderValueKobo": 0, "maxOrderValueKobo": 4999999 },
+  "rate_value_tier_high": { "feeKobo": 100000, "minOrderValueKobo": 5000000 },
+  "rate_weight_tier": { "feeKobo": 120000, "minWeightKg": 0, "maxWeightKg": 5 },
+  "rate_negative_fee": { "zoneId": "<ZONE_ID>", "feeKobo": -100 },
+
+  "condition_always": { "conditionType": "always" },
+  "condition_min_order_value": { "conditionType": "min_order_value", "thresholdKobo": 5000000 },
+  "condition_product": { "conditionType": "product", "productId": "<PRODUCT_ID>" },
+  "condition_category": { "conditionType": "category", "categoryId": "<CATEGORY_ID>" },
+  "condition_promo_code": { "conditionType": "promo_code", "promoCode": "QAFREESHIP" },
+  "condition_bad_type": { "conditionType": "vibes" },
+
+  "pickup_create_branch": {
+    "name": "QA Ikeja Pickup Desk",
+    "locationType": "merchant_branch",
+    "locationId": "<LOCATION_ID>",
+    "address": "14 Obafemi Awolowo Way, Ikeja",
+    "state": "Lagos",
+    "phone": "+2348030000002",
+    "operatingHours": "Mon-Sat 09:00-18:00"
+  },
+  "pickup_create_third_party": {
+    "name": "QA GIG Yaba Hub",
+    "locationType": "third_party",
+    "providerName": "GIG Logistics",
+    "address": "3 Herbert Macaulay Way, Yaba",
+    "state": "Lagos",
+    "operatingHours": "Mon-Fri 08:00-17:00"
+  },
+  "pickup_update": { "operatingHours": "Mon-Sun 08:00-20:00", "isActive": true },
+
+  "dispatch_configure": {
+    "provider": "traka",
+    "apiKey": "qa-traka-api-key-0123456789",
+    "webhookSecret": "qa-traka-webhook-secret",
+    "baseUrl": "https://sandbox.traka.example.com"
+  },
+  "dispatch_configure_short_key": {
+    "provider": "traka",
+    "apiKey": "short",
+    "webhookSecret": "qa-traka-webhook-secret"
+  },
+  "dispatch_configure_bad_provider": {
+    "provider": "uber",
+    "apiKey": "qa-api-key-0123456789",
+    "webhookSecret": "qa-webhook-secret"
+  },
+  "dispatch_quote": {
+    "pickupAddress": "14 Obafemi Awolowo Way, Ikeja, Lagos",
+    "deliveryAddress": "22 Admiralty Way, Lekki Phase 1, Lagos",
+    "weightKg": 2.5
+  },
+  "dispatch_quote_zero_weight": {
+    "pickupAddress": "14 Obafemi Awolowo Way, Ikeja, Lagos",
+    "deliveryAddress": "22 Admiralty Way, Lekki Phase 1, Lagos",
+    "weightKg": 0
+  },
+  "dispatch_order": {
+    "pickupAddress": "14 Obafemi Awolowo Way, Ikeja, Lagos",
+    "recipientName": "Chidinma Eze",
+    "recipientPhone": "+2348031234567",
+    "weightKg": 2.5
+  },
+
+  "_query_examples": {
+    "states": "GET /v1/shipping/states",
+    "pickup_by_state": "GET /v1/shipping/pickup-locations?state=Lagos",
+    "available": "GET /v1/shipping/available?orderValueKobo=7500000&destinationState=Lagos&totalWeightKg=2.5&promoCode=QAFREESHIP&itemProductIds=<ID1>,<ID2>&itemCategoryIds=<CID1>",
+    "available_below_free_threshold": "GET /v1/shipping/available?orderValueKobo=1000000&destinationState=Lagos",
+    "track": "GET /v1/dispatch/<ORDER_ID>/track"
+  }
+}

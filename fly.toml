@@ -1,46 +1,40 @@
-# Fly.io deployment configuration for BPOS
-# See https://fly.io/docs/reference/configuration/
+# Fly.io configuration — staging/development environment
+# Production runs on Hetzner VPS; Fly.io is for QA and frontend dev access
 
-app = "sabby"
-primary_region = "lhr"  # London - closest to Nigeria
+app = "bpos-staging"
+primary_region = "ams"  # Amsterdam — closest to Nigeria with good latency
 
 [build]
-  dockerfile = "Dockerfile"
-
-[deploy]
-  create_if_not_exists = true
-
-[processes]
-  app = "node dist/server.js"
-  worker = "node dist/queue/worker.js"
+  dockerfile = "docker/Dockerfile"
 
 [env]
   NODE_ENV = "staging"
   PORT = "3000"
   HOST = "0.0.0.0"
+  SWAGGER_ENABLED = "true"
 
 [http_service]
   internal_port = 3000
   force_https = true
-  auto_stop_machines = "suspend"
+  auto_stop_machines = true
   auto_start_machines = true
   min_machines_running = 1
-  processes = ["app"]
 
   [http_service.concurrency]
     type = "requests"
-    hard_limit = 250
-    soft_limit = 200
-
-[[http_service.checks]]
-  grace_period = "10s"
-  interval = "30s"
-  method = "GET"
-  timeout = "5s"
-  path = "/health"
+    hard_limit = 200
+    soft_limit = 150
 
 [[vm]]
   size = "shared-cpu-1x"
   memory = "512mb"
-  cpu_kind = "shared"
-  cpus = 1
+
+[checks]
+  [checks.health]
+    grace_period = "30s"
+    interval = "15s"
+    method = "GET"
+    path = "/health"
+    port = 3000
+    timeout = "5s"
+    type = "http"

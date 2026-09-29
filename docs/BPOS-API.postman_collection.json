@@ -1,13 +1,17 @@
 {
   "info": {
     "name": "BPOS API",
-    "description": "Multi-tenant commerce and operations platform for Nigerian SMEs\n\n## Authentication\nAll protected endpoints require a Bearer token in the Authorization header.\n\n1. POST `/v1/auth/login` with email + password to get `accessToken` and `refreshToken`\n2. Use `{{accessToken}}` variable in the `Authorization: Bearer {{accessToken}}` header\n3. When token expires, POST `/v1/auth/refresh` with the refresh token to get a new pair\n\n## Multi-Tenancy\nEvery authenticated request is scoped to the tenant embedded in the JWT. No `X-Tenant-ID` header is needed.\n\n## Monetary Values\nAll monetary values are stored and returned as **integer kobo** (₦1 = 100 kobo). Divide by 100 to convert to Naira.\n\n## Error Envelope\n```json\n{\n  \"success\": false,\n  \"error\": {\n    \"code\": \"VALIDATION_ERROR\",\n    \"message\": \"'from' must be before 'to'\",\n    \"details\": []\n  }\n}\n```\n\n## Feature Flags\nSome endpoints are gated by subscription tier. A `402` response with `FEATURE_GATED` code means the merchant's plan does not include the feature.",
+    "description": "Multi-tenant commerce and operations platform for Nigerian SMEs\n\n## Authentication\nAll protected endpoints require a Bearer token in the Authorization header.\n\n1. POST `/v1/auth/login` with `tenantSlug` (the business handle) + email + password to get `accessToken`, `refreshToken` and `user`. Run **Provision Tenant** first, or set `tenantSlug` to an existing business\n2. Use `{{accessToken}}` variable in the `Authorization: Bearer {{accessToken}}` header\n3. When a request returns 401, POST `/v1/auth/refresh` with `tenantSlug` + `refreshToken` to get a new `accessToken` (the refresh token is reused until it expires after 7 days or is revoked by logout)\n\n## Multi-Tenancy\nEvery authenticated request is scoped to the tenant embedded in the JWT. No `X-Tenant-ID` header is needed.\n\n## Monetary Values\nAll monetary values are stored and returned as **integer kobo** (₦1 = 100 kobo). Divide by 100 to convert to Naira.\n\n## Error Envelope\n```json\n{\n  \"success\": false,\n  \"error\": {\n    \"code\": \"VALIDATION_ERROR\",\n    \"message\": \"'from' must be before 'to'\",\n    \"details\": []\n  }\n}\n```\n\n## Feature Flags\nSome endpoints are gated by subscription tier. A `402` response with `FEATURE_GATED` code means the merchant's plan does not include the feature.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:3000"
+      "value": "http://localhost:5001"
+    },
+    {
+      "key": "tenantSlug",
+      "value": "adaeze-beauty"
     },
     {
       "key": "accessToken",
@@ -46,7 +50,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"merchant@example.com\",\n  \"password\": \"password123\"\n}"
+              "raw": "{\n  \"tenantSlug\": \"{{tenantSlug}}\",\n  \"email\": \"adaeze@example.com\",\n  \"password\": \"securePassword123\"\n}"
             },
             "description": "Authenticate and receive JWT access + refresh tokens. Rate limited: 10 requests per minute."
           },
@@ -76,9 +80,9 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+              "raw": "{\n  \"tenantSlug\": \"{{tenantSlug}}\",\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
             },
-            "description": "Exchange a refresh token for a new access + refresh token pair. Rate limited: 10 requests per minute."
+            "description": "Exchange a refresh token for a new access token. The refresh token itself is not rotated; keep using it until it expires (7 days) or logout revokes it. Rate limited: 20 requests per minute."
           },
           "event": [
             {
@@ -87,8 +91,8 @@
                 "exec": [
                   "var res = pm.response.json();",
                   "if (res.success) {",
+                  "  // Only the access token is renewed; keep the existing refreshToken.",
                   "  pm.collectionVariables.set('accessToken', res.data.accessToken);",
-                  "  pm.collectionVariables.set('refreshToken', res.data.refreshToken);",
                   "}"
                 ]
               }
@@ -144,10 +148,23 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"businessName\": \"Adaeze Beauty Store\",\n  \"ownerEmail\": \"adaeze@example.com\",\n  \"ownerPassword\": \"securePassword123\",\n  \"ownerFirstName\": \"Adaeze\",\n  "ownerLastName\": \"Okoro\"\n}"
+              "raw": "{\n  \"name\": \"Adaeze Beauty Store\",\n  \"slug\": \"adaeze-beauty\",\n  \"businessEmail\": \"adaeze@example.com\",\n  \"ownerPassword\": \"securePassword123\",\n  \"ownerFirstName\": \"Adaeze\",\n  \"ownerLastName\": \"Okoro\"\n}"
             },
-            "description": "Provision a new merchant tenant. Creates the tenant schema, owner user, and starter plan subscription. Unauthenticated."
+            "description": "Public signup. Creates an isolated tenant schema and the owner account. The owner logs in with `slug` as `tenantSlug` and `businessEmail` as email. Rate limited: 3 per hour per IP. Saves `slug` to the `tenantSlug` variable."
           },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var res = pm.response.json();",
+                  "if (res.success) {",
+                  "  pm.collectionVariables.set('tenantSlug', res.data.slug);",
+                  "}"
+                ]
+              }
+            }
+          ],
           "response": []
         }
       ]
