@@ -38,15 +38,14 @@ import dispatchRoutes from './modules/dispatch/routes.js';
 import uploadsRoutes from './modules/uploads/routes.js';
 import shippingRoutes from './modules/shipping/routes.js';
 import platformRoutes from './modules/platform/routes.js';
+import settingsRoutes from './modules/settings/routes.js';
 
 export function buildApp() {
-  /* eslint-disable @typescript-eslint/no-unsafe-assignment */
   const axiomTransport = createAxiomLogger();
 
   const app = Fastify({
     logger: {
       level: env.NODE_ENV === 'test' ? 'silent' : 'info',
-      redact: ['req.headers.authorization', '*.password', '*.token', '*.secret', '*.apiKey'],
       ...(axiomTransport ? { transport: axiomTransport } : {}),
       ...(env.NODE_ENV === 'development' && !axiomTransport
         ? {
@@ -57,7 +56,6 @@ export function buildApp() {
           }
         : {}),
     },
-    /* eslint-enable @typescript-eslint/no-unsafe-assignment */
     requestIdHeader: 'x-request-id',
     requestIdLogLabel: 'requestId',
     trustProxy: true,
@@ -86,6 +84,11 @@ export function buildApp() {
   void app.register(jwtPlugin, {
     secret: env.JWT_ACCESS_SECRET,
     sign: { expiresIn: env.JWT_ACCESS_EXPIRY },
+    // The token carries short claim names (sub/tid) to keep it small, but
+    // resolveTenant, /auth/me, logout and the Sentry context all read
+    // request.user.userId / .tenantId. Without this mapping those are
+    // undefined and every authenticated tenant request fails with
+    // "Tenant context missing from token".
     formatUser: (payload) => ({
       ...payload,
       userId: payload.sub,
@@ -93,43 +96,27 @@ export function buildApp() {
     }),
   });
 
-  // Platform ops plane JWT — a SEPARATE audience with its own secret, so a
-  // tenant token can never be replayed against a platform route (and vice
-  // versa). Decorates app.jwt.platform.sign and request.platformJwtVerify.
-  void app.register(jwtPlugin, {
-    namespace: 'platform',
-    secret: env.PLATFORM_JWT_ACCESS_SECRET,
-    sign: {
-      expiresIn: env.PLATFORM_JWT_ACCESS_EXPIRY,
-      aud: 'sabby-platform',
-      iss: 'sabby-platform',
-    },
-    verify: { allowedAud: 'sabby-platform', allowedIss: 'sabby-platform' },
-    jwtVerify: 'platformJwtVerify',
-    jwtSign: 'platformJwtSign',
-    decoratorName: 'platformTokenPayload',
-  });
+  // Second JWT instance for the internal admin plane, under its own namespace
+  // and its own secret. Keeping the key sets disjoint is what stops a
+  // tenant-token compromise from minting a platform token — a platform token
+  // cannot be verified by the tenant instance, and vice versa.
+  if (env.JWT_PLATFORM_SECRET) {
+    void app.register(jwtPlugin, {
+      secret: env.JWT_PLATFORM_SECRET,
+      namespace: 'platform',
+      jwtVerify: 'platformJwtVerify',
+      jwtSign: 'platformJwtSign',
+      sign: { expiresIn: env.JWT_PLATFORM_ACCESS_EXPIRY },
+    });
+  }
 
   registerRequestId(app);
 
-  // Root route (unauthenticated, not in swagger)
-  // Returns app status + live DB/Redis/queue connection status
-  // Root route: lightweight liveness check (no DB/Redis/queue probes)
-  app.get('/', { schema: { hide: true } }, async (_request, reply) => {
-    return reply.status(200).send({
-      app: 'Sabby API',
-      message: 'Sabby API is running',
-      timestamp: new Date().toISOString(),
-      environment: env.NODE_ENV,
-      uptime: process.uptime(),
-    });
-  });
-
-  // Health check: full readiness probe with DB + Redis + queue status
-  // Returns 503 for degraded or error so orchestrators can act
+  // Health check (unauthenticated, not in swagger)
+  // Returns DB + Redis + queue status with appropriate HTTP status code
   app.get('/health', { schema: { hide: true } }, async (_request, reply) => {
     const health = await runHealthChecks();
-    const statusCode = health.status === 'ok' ? 200 : 503;
+    const statusCode = health.status === 'ok' ? 200 : health.status === 'degraded' ? 200 : 503;
     return reply.status(statusCode).send(health);
   });
 
@@ -153,7 +140,12 @@ export function buildApp() {
   void app.register(dispatchRoutes, { prefix: '/v1/dispatch' });
   void app.register(uploadsRoutes, { prefix: '/v1/uploads' });
   void app.register(shippingRoutes, { prefix: '/v1/shipping' });
-  void app.register(platformRoutes, { prefix: '/v1/platform' });
+  void app.register(settingsRoutes, { prefix: '/v1/settings' });
+
+  // Internal admin plane — only mounted when its signing secret is configured.
+  if (env.JWT_PLATFORM_SECRET) {
+    void app.register(platformRoutes, { prefix: '/v1/platform' });
+  }
 
   return app;
 }

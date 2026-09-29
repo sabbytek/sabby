@@ -10,9 +10,7 @@ async function rateLimitPlugin(app: FastifyInstance) {
     keyGenerator: (request) => {
       // Rate limit per tenant + IP for authenticated requests, per IP otherwise
       const tenantId = request.headers['x-tenant-id'] as string | undefined;
-      return tenantId
-        ? `${tenantId}:${request.ip}`
-        : request.ip;
+      return tenantId ? `${tenantId}:${request.ip}` : request.ip;
     },
     errorResponseBuilder: () => ({
       success: false,
