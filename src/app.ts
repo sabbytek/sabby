@@ -112,6 +112,17 @@ export function buildApp() {
 
   registerRequestId(app);
 
+  // Root liveness probe — unauthenticated, not in swagger
+  app.get('/', { schema: { hide: true } }, (_request, reply) => {
+    return reply.send({
+      app: 'Sabby API',
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      environment: env.NODE_ENV,
+      uptime: Math.floor(process.uptime()),
+    });
+  });
+
   // Health check (unauthenticated, not in swagger)
   // Returns DB + Redis + queue status with appropriate HTTP status code
   app.get('/health', { schema: { hide: true } }, async (_request, reply) => {
