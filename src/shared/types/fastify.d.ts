@@ -30,10 +30,20 @@ declare module '@fastify/jwt' {
 declare module 'fastify' {
   interface FastifyRequest {
     tenant: TenantContext;
-    // Platform ops plane. `platformJwtVerify` is decorated by the second,
-    // namespaced @fastify/jwt instance; `platformAuth` is the normalized
-    // context our middleware attaches after a successful verify.
-    platformJwtVerify<Decoded = PlatformJwtPayload>(): Promise<Decoded>;
-    platformAuth?: PlatformAuthUser;
+    /**
+     * Populated by requirePlatformAuth for internal-staff requests only.
+     * Never set on tenant-plane requests — the two planes are disjoint.
+     */
+    platformUser: PlatformAuthUser;
+    /**
+     * Verifies against JWT_PLATFORM_SECRET. Added by the second @fastify/jwt
+     * registration (namespace: 'platform') in app.ts, so a tenant-plane token
+     * can never satisfy it.
+     */
+    platformJwtVerify<T = PlatformJwtPayload>(): Promise<T>;
   }
 }
+
+// Note: instance-side signing is NOT a decorator. @fastify/jwt puts the
+// namespaced signer at app.jwt.platform.sign() — see
+// modules/platform/auth/jwt.ts, which wraps it in a typed helper.

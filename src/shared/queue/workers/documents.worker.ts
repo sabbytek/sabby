@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
 import { eq } from 'drizzle-orm';
 import { createWorker, QUEUES } from '../client.js';
 import type { GenerateInvoiceJobData } from '../../../modules/invoicing/service.js';
@@ -6,12 +5,18 @@ import { updateInvoicePdf } from '../../../modules/invoicing/service.js';
 import { withTenantSchema } from '../../db/tenant.js';
 import { db } from '../../db/client.js';
 import { tenants } from '../../db/schema/public.js';
-import { orders, orderItems, productVariants, customers, invoices } from '../../db/schema/tenant.js';
+import {
+  orders,
+  orderItems,
+  productVariants,
+  customers,
+  invoices,
+} from '../../db/schema/tenant.js';
 import { renderInvoicePdf } from '../../pdf/invoice.js';
-import { uploadToR2 } from '../../storage/r2.js';
-import { sendInvoiceEmail } from '../../email/resend.js';
+import { uploadPrivate } from '../../storage/private.js';
+import { sendInvoiceEmail } from '../../email/index.js';
 
-export const documentsWorker = createWorker<GenerateInvoiceJobData>(QUEUES.DOCUMENTS, async (job) => {
+createWorker<GenerateInvoiceJobData>(QUEUES.DOCUMENTS, async (job) => {
   if (job.name !== 'generate-invoice-pdf') return;
 
   const { tenantId, schemaName, invoiceId, orderId } = job.data;
@@ -29,19 +34,11 @@ export const documentsWorker = createWorker<GenerateInvoiceJobData>(QUEUES.DOCUM
 
   // ── 2. Fetch order + line items + customer from tenant schema ─────────────────
   const invoiceData = await withTenantSchema(schemaName, async (tdb) => {
-    const [invoice] = await tdb
-      .select()
-      .from(invoices)
-      .where(eq(invoices.id, invoiceId))
-      .limit(1);
+    const [invoice] = await tdb.select().from(invoices).where(eq(invoices.id, invoiceId)).limit(1);
 
     if (!invoice) throw new Error(`Invoice ${invoiceId} not found`);
 
-    const [order] = await tdb
-      .select()
-      .from(orders)
-      .where(eq(orders.id, orderId))
-      .limit(1);
+    const [order] = await tdb.select().from(orders).where(eq(orders.id, orderId)).limit(1);
 
     if (!order) throw new Error(`Order ${orderId} not found`);
 
@@ -59,7 +56,13 @@ export const documentsWorker = createWorker<GenerateInvoiceJobData>(QUEUES.DOCUM
       .innerJoin(productVariants, eq(orderItems.variantId, productVariants.id))
       .where(eq(orderItems.orderId, orderId));
 
-    let customer: { firstName: string; lastName: string | null; email: string | null; phone: string | null; address: string | null } | null = null;
+    let customer: {
+      firstName: string;
+      lastName: string | null;
+      email: string | null;
+      phone: string | null;
+      address: string | null;
+    } | null = null;
     if (order.customerId) {
       const [c] = await tdb
         .select({
@@ -106,13 +109,18 @@ export const documentsWorker = createWorker<GenerateInvoiceJobData>(QUEUES.DOCUM
     orderChannel: order.channel,
   });
 
-  // ── 4. Upload to R2 ───────────────────────────────────────────────────────────
-  const r2Key = `invoices/${tenantId}/${invoiceId}.pdf`;
-  const pdfUrl = await uploadToR2({ key: r2Key, body: pdfBuffer, contentType: 'application/pdf' });
+  // ── 4. Upload to private storage ──────────────────────────────────────────────
+  // Invoices carry customer and payment details, so they are never public. The
+  // key starts with the schema name so resolveFileUrl() signs it for this tenant only.
+  const pdfRef = await uploadPrivate({
+    key: `${schemaName}/invoices/${invoiceId}.pdf`,
+    body: pdfBuffer,
+    contentType: 'application/pdf',
+  });
 
   // ── 5. Update invoice record ──────────────────────────────────────────────────
-  await updateInvoicePdf(schemaName, invoiceId, pdfUrl);
-  await job.log(`[documents.worker] PDF uploaded to ${pdfUrl}`);
+  await updateInvoicePdf(schemaName, invoiceId, pdfRef);
+  await job.log(`[documents.worker] PDF stored as ${pdfRef}`);
 
   // ── 6. Email customer (if they have an email on file) ─────────────────────────
   if (customer?.email) {

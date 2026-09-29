@@ -61,73 +61,70 @@ async function getTenantPhone(tenantId: string): Promise<string | null> {
   return tenant?.businessPhone ?? null;
 }
 
-export const logisticsWorker = createWorker<LogisticsJobData>(
-  QUEUES.LOGISTICS,
-  async (job) => {
-    const { name, data } = job;
+export const logisticsWorker = createWorker<LogisticsJobData>(QUEUES.LOGISTICS, async (job) => {
+  const { name, data } = job;
 
-    switch (name) {
-      case 'notify-customer-dispatched': {
-        const d = data as DispatchedJobData;
-        void job.log(
-          JSON.stringify({
-            event: 'customer_dispatch_notification',
-            tenantId: d.tenantId,
-            orderId: d.orderId,
-            trackingNumber: d.trackingNumber,
-            provider: d.providerName,
-          }),
-        );
+  switch (name) {
+    case 'notify-customer-dispatched': {
+      const d = data as DispatchedJobData;
+      void job.log(
+        JSON.stringify({
+          event: 'customer_dispatch_notification',
+          tenantId: d.tenantId,
+          orderId: d.orderId,
+          trackingNumber: d.trackingNumber,
+          provider: d.providerName,
+        }),
+      );
 
-        const phone = await getCustomerPhone(d.schemaName, d.orderId);
-        if (phone) {
-          const message = `[BPOS] Your order has been dispatched via ${d.providerName}. Tracking: ${d.trackingNumber}`;
-          await sendSMS(phone, message);
-        }
-        break;
+      const phone = await getCustomerPhone(d.schemaName, d.orderId);
+      if (phone) {
+        const message = `[BPOS] Your order has been dispatched via ${d.providerName}. Tracking: ${d.trackingNumber}`;
+        await sendSMS(phone, message);
       }
-
-      case 'notify-customer-delivered': {
-        const d = data as DeliveredJobData;
-        void job.log(
-          JSON.stringify({
-            event: 'customer_delivery_notification',
-            tenantId: d.tenantId,
-            orderId: d.orderId,
-            trackingNumber: d.trackingNumber,
-          }),
-        );
-
-        const phone = await getCustomerPhone(d.schemaName, d.orderId);
-        if (phone) {
-          const message = `[BPOS] Your order has been delivered. Tracking: ${d.trackingNumber}`;
-          await sendSMS(phone, message);
-        }
-        break;
-      }
-
-      case 'notify-merchant-failed': {
-        const d = data as FailedJobData;
-        void job.log(
-          JSON.stringify({
-            event: 'merchant_dispatch_failure_alert',
-            tenantId: d.tenantId,
-            orderId: d.orderId,
-            trackingNumber: d.trackingNumber,
-            eventType: d.eventType,
-          }),
-        );
-
-        const phone = await getTenantPhone(d.tenantId);
-        if (phone) {
-          const message = `[BPOS] Dispatch alert: order ${d.orderId} event "${d.eventType}" failed. Tracking: ${d.trackingNumber}. Please check your dashboard.`;
-          await sendSMS(phone, message);
-        }
-        break;
-      }
-
-      default:
-        void job.log(`Unknown logistics job: ${name}`);
+      break;
     }
-  },
-);
+
+    case 'notify-customer-delivered': {
+      const d = data as DeliveredJobData;
+      void job.log(
+        JSON.stringify({
+          event: 'customer_delivery_notification',
+          tenantId: d.tenantId,
+          orderId: d.orderId,
+          trackingNumber: d.trackingNumber,
+        }),
+      );
+
+      const phone = await getCustomerPhone(d.schemaName, d.orderId);
+      if (phone) {
+        const message = `[BPOS] Your order has been delivered. Tracking: ${d.trackingNumber}`;
+        await sendSMS(phone, message);
+      }
+      break;
+    }
+
+    case 'notify-merchant-failed': {
+      const d = data as FailedJobData;
+      void job.log(
+        JSON.stringify({
+          event: 'merchant_dispatch_failure_alert',
+          tenantId: d.tenantId,
+          orderId: d.orderId,
+          trackingNumber: d.trackingNumber,
+          eventType: d.eventType,
+        }),
+      );
+
+      const phone = await getTenantPhone(d.tenantId);
+      if (phone) {
+        const message = `[BPOS] Dispatch alert: order ${d.orderId} event "${d.eventType}" failed. Tracking: ${d.trackingNumber}. Please check your dashboard.`;
+        await sendSMS(phone, message);
+      }
+      break;
+    }
+
+    default:
+      void job.log(`Unknown logistics job: ${name}`);
+  }
+});

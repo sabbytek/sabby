@@ -26,36 +26,6 @@ export interface ComponentCheck {
   message?: string;
 }
 
-// Bound every component check so /health and / can never hang indefinitely
-// (e.g. BullMQ commands buffer forever when Redis is unreachable).
-const CHECK_TIMEOUT_MS = 4000;
-
-async function withCheckTimeout<T>(label: string, promise: Promise<T>): Promise<T> {
-  let timer: NodeJS.Timeout | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () => reject(new Error(`${label} check timed out after ${CHECK_TIMEOUT_MS}ms`)),
-      CHECK_TIMEOUT_MS,
-    );
-  });
-  try {
-    return await Promise.race([promise, timeout]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-async function runCheck(label: string, check: () => Promise<ComponentCheck>): Promise<ComponentCheck> {
-  try {
-    return await withCheckTimeout(label, check());
-  } catch (err) {
-    return {
-      status: 'error',
-      message: err instanceof Error ? err.message : `${label} check timed out`,
-    };
-  }
-}
-
 /**
  * Check database connectivity by running a simple query.
  */
@@ -78,11 +48,46 @@ async function checkDatabase(): Promise<ComponentCheck> {
 }
 
 /**
+ * Resolve once the lazy cache client is ready to accept commands, whatever
+ * connection state it is currently in. `connect()` only accepts a fresh client
+ * (status 'wait'/'end'); if it is already mid-connect we wait for the 'ready'
+ * event instead of racing a command onto an unwritable socket.
+ */
+async function ensureCacheReady(): Promise<void> {
+  if (cache.status === 'ready') return;
+  if (cache.status === 'wait' || cache.status === 'end') {
+    await cache.connect();
+    return;
+  }
+  await new Promise<void>((resolve, reject) => {
+    const onReady = (): void => {
+      cleanup();
+      resolve();
+    };
+    const onError = (err: Error): void => {
+      cleanup();
+      reject(err);
+    };
+    const cleanup = (): void => {
+      cache.off('ready', onReady);
+      cache.off('error', onError);
+    };
+    cache.once('ready', onReady);
+    cache.once('error', onError);
+  });
+}
+
+/**
  * Check Redis connectivity by pinging.
  */
 async function checkRedis(): Promise<ComponentCheck> {
   const start = Date.now();
   try {
+    // The cache client is lazyConnect with enableOfflineQueue disabled, so a
+    // ping issued before the socket is ready is rejected outright ("Stream
+    // isn't writeable"). Ensure the connection is ready first — this makes the
+    // very first health probe after boot accurate instead of falsely degraded.
+    await ensureCacheReady();
     const pong = await cache.ping();
     const latencyMs = Date.now() - start;
     const isHealthy = pong === 'PONG';
@@ -106,9 +111,21 @@ async function checkQueues(): Promise<ComponentCheck> {
   const start = Date.now();
   try {
     // Dynamic import to avoid circular dependencies
-    const { notificationsQueue, documentsQueue, paymentsQueue, subscriptionsQueue, logisticsQueue } = await import('../queue/client.js');
+    const {
+      notificationsQueue,
+      documentsQueue,
+      paymentsQueue,
+      subscriptionsQueue,
+      logisticsQueue,
+    } = await import('../queue/client.js');
 
-    const queues = [notificationsQueue, documentsQueue, paymentsQueue, subscriptionsQueue, logisticsQueue];
+    const queues = [
+      notificationsQueue,
+      documentsQueue,
+      paymentsQueue,
+      subscriptionsQueue,
+      logisticsQueue,
+    ];
     const results = await Promise.allSettled(
       queues.map(async (q) => {
         const counts = await q.getJobCounts('waiting', 'active', 'completed', 'failed');
@@ -149,9 +166,9 @@ async function checkQueues(): Promise<ComponentCheck> {
  */
 export async function runHealthChecks(): Promise<HealthCheckResult> {
   const [database, redis, queues] = await Promise.all([
-    runCheck('database', checkDatabase),
-    runCheck('redis', checkRedis),
-    runCheck('queues', checkQueues),
+    checkDatabase(),
+    checkRedis(),
+    checkQueues(),
   ]);
 
   const checks = { database, redis, queues };

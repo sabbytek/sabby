@@ -59,7 +59,7 @@ export async function renderInvoicePdf(data: InvoiceData): Promise<Buffer> {
   const white = rgb(1, 1, 1);
 
   let y = height - 50;
-  const L = 50;  // left margin
+  const L = 50; // left margin
   const R = width - 50; // right edge
 
   function text(
@@ -118,8 +118,14 @@ export async function renderInvoicePdf(data: InvoiceData): Promise<Buffer> {
   text('BILL TO', L, billY, { font: bold, size: 8, color: grey });
   let billLine = billY - 14;
   text(data.customerName, L, billLine, { font: bold, size: 10 });
-  if (data.customerEmail) { billLine -= 13; text(data.customerEmail, L, billLine, { size: 9 }); }
-  if (data.customerPhone) { billLine -= 13; text(data.customerPhone, L, billLine, { size: 9 }); }
+  if (data.customerEmail) {
+    billLine -= 13;
+    text(data.customerEmail, L, billLine, { size: 9 });
+  }
+  if (data.customerPhone) {
+    billLine -= 13;
+    text(data.customerPhone, L, billLine, { size: 9 });
+  }
   if (data.customerAddress) {
     // wrap long addresses crudely at 40 chars
     const addr = data.customerAddress;
@@ -168,7 +174,11 @@ export async function renderInvoicePdf(data: InvoiceData): Promise<Buffer> {
 
   function totRow(label: string, valueKobo: number, isBold = false) {
     y -= 16;
-    text(label, totLabelX, y, { font: isBold ? bold : regular, size: 9, color: isBold ? black : grey });
+    text(label, totLabelX, y, {
+      font: isBold ? bold : regular,
+      size: 9,
+      color: isBold ? black : grey,
+    });
     const val = formatNaira(valueKobo);
     text(val, totValueX - regular.widthOfTextAtSize(val, 9), y, {
       font: isBold ? bold : regular,

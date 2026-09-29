@@ -1,25 +1,30 @@
-import type { Job } from 'bullmq';
 import { createWorker, QUEUES } from '../client.js';
 import { lapseSubscription, startGracePeriod } from '../../../modules/subscriptions/service.js';
 
-interface SubscriptionJobData {
+interface GraceExpireJobData {
   tenantId: string;
   schemaName: string;
 }
 
-type SubscriptionJobName = 'grace-expire' | 'billing-retry';
+interface BillingRetryJobData {
+  tenantId: string;
+  schemaName: string;
+}
+
+type SubscriptionJobData = GraceExpireJobData | BillingRetryJobData;
 
 // 'grace-expire'  — fire when a grace period expires; moves status to lapsed
 // 'billing-retry' — fire after a failed recurring charge; enters grace if retries exhausted
-export const subscriptionsWorker = createWorker<SubscriptionJobData>(QUEUES.SUBSCRIPTIONS, async (job: Job<SubscriptionJobData>) => {
+createWorker<SubscriptionJobData>(QUEUES.SUBSCRIPTIONS, async (job) => {
   const { tenantId, schemaName } = job.data;
-  const name = job.name as SubscriptionJobName;
 
-  if (name === 'grace-expire') {
+  if (job.name === 'grace-expire') {
     await lapseSubscription(schemaName, tenantId);
   }
 
-  if (name === 'billing-retry') {
-    await startGracePeriod(schemaName, tenantId).catch((_err: unknown) => undefined);
+  if (job.name === 'billing-retry') {
+    await startGracePeriod(schemaName, tenantId).catch(() => {
+      /* non-fatal: secondary failure intentionally ignored */
+    });
   }
 });

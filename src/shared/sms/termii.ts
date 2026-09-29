@@ -42,7 +42,7 @@ export const termiiProvider: SmsProvider = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${env.TERMII_API_KEY}`,
+        Authorization: `Bearer ${env.TERMII_API_KEY}`,
       },
       body: JSON.stringify(payload),
     });

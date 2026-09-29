@@ -2,8 +2,8 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 import { env } from '../../config/env.js';
 
 const ALGORITHM = 'aes-256-gcm';
-const IV_LEN = 12;    // 96-bit IV recommended for GCM
-const TAG_LEN = 16;   // 128-bit auth tag
+const IV_LEN = 12; // 96-bit IV recommended for GCM
+const TAG_LEN = 16; // 128-bit auth tag
 
 function getKey(): Buffer {
   const hex = env.PLATFORM_ENCRYPTION_KEY;
