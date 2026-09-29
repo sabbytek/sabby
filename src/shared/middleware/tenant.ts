@@ -10,10 +10,7 @@ import { UnauthorizedError, NotFoundError } from '../errors/types.js';
  *
  * Must be used after requireAuth — depends on request.user being populated.
  */
-export async function resolveTenant(
-  request: FastifyRequest,
-  _reply: FastifyReply,
-): Promise<void> {
+export async function resolveTenant(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
   const tenantId = request.user.tenantId;
   if (!tenantId) {
     throw new UnauthorizedError('Tenant context missing from token');

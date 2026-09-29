@@ -10,9 +10,6 @@ import type { UserRole } from '../types/index.js';
 export async function requireAuth(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
   try {
     await request.jwtVerify();
-    // Populate convenience aliases from JWT payload
-    request.user.userId = request.user.sub;
-    request.user.tenantId = request.user.tid;
   } catch {
     throw new UnauthorizedError('Invalid or expired token');
   }
@@ -29,16 +26,10 @@ export function requireRole(...roles: UserRole[]) {
   };
 }
 
-export async function requireOwner(
-  request: FastifyRequest,
-  reply: FastifyReply,
-): Promise<void> {
+export async function requireOwner(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   return requireRole('owner')(request, reply);
 }
 
-export async function requireManager(
-  request: FastifyRequest,
-  reply: FastifyReply,
-): Promise<void> {
+export async function requireManager(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   return requireRole('owner', 'manager')(request, reply);
 }
