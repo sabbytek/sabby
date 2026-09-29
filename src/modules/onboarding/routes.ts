@@ -10,19 +10,23 @@ export default function onboardingRoutes(app: FastifyInstance) {
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
   // ─── GET /onboarding — merchant setup checklist ──────────────────────────
-  typed.get('/', {
-    preHandler: [requireAuth, resolveTenant],
-    schema: {
-      tags: ['Onboarding'],
-      summary: 'Get guided setup checklist for this merchant',
-      description:
-        'Returns which onboarding steps are complete and which are pending. ' +
-        'Poll this endpoint to drive a guided first-time setup UI.',
-      security: [{ bearerAuth: [] }],
+  typed.get(
+    '/',
+    {
+      preHandler: [requireAuth, resolveTenant],
+      schema: {
+        tags: ['Onboarding'],
+        summary: 'Get guided setup checklist for this merchant',
+        description:
+          'Returns which onboarding steps are complete and which are pending. ' +
+          'Poll this endpoint to drive a guided first-time setup UI.',
+        security: [{ bearerAuth: [] }],
+      },
     },
-  }, async (request, reply) => {
-    const ctx = createContext(request);
-    const status = await controller.getStatus(ctx);
-    sendSuccess(reply, status);
-  });
+    async (request, reply) => {
+      const ctx = createContext(request);
+      const status = await controller.getStatus(ctx);
+      return sendSuccess(reply, status);
+    },
+  );
 }

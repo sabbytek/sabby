@@ -12,9 +12,8 @@ export interface InitiatePaymentInput {
   email: string;
 }
 
-export async function initiate(ctx: RequestContext, input: InitiatePaymentInput): Promise<unknown> {
-  const result = await initiatePayment(ctx.schema, input.orderId, ctx.userId, input.email);
-  return result;
+export async function initiate(ctx: RequestContext, input: InitiatePaymentInput) {
+  return initiatePayment(ctx.schema, input.orderId, ctx.userId, input.email);
 }
 
 /**
@@ -22,17 +21,15 @@ export async function initiate(ctx: RequestContext, input: InitiatePaymentInput)
  * Returns a result indicating whether the event was processed.
  */
 export async function handleWebhook(
-  tenantId: string,
   schemaName: string,
   eventType: string,
   data: PaystackWebhookData,
   meta: Record<string, unknown>,
-): Promise<void> {
+) {
   if (meta['type'] === 'subscription') {
     // Import here to avoid circular dependency
-    const { handleSubscriptionBillingWebhook } = await import(
-      '../subscriptions/service.js'
-    );
+    const { handleSubscriptionBillingWebhook } = await import('../subscriptions/service.js');
+    const tenantId = (meta['tenantId'] as string) ?? '';
     const planTier = (meta['planTier'] as string) ?? '';
     const rawData = data as unknown as Record<string, unknown>;
     const authorization = rawData['authorization'] as Record<string, unknown> | undefined;
@@ -45,8 +42,10 @@ export async function handleWebhook(
       planTier as 'entry' | 'growth' | 'enterprise',
       (authorization?.['authorization_code'] as string) ?? '',
       (customer?.['customer_code'] as string) ?? '',
-    ).catch(() => {});
+    ).catch(() => {
+      /* non-fatal: secondary failure intentionally ignored */
+    });
   } else {
-    await handlePaystackWebhook(tenantId, schemaName, eventType, data);
+    await handlePaystackWebhook(schemaName, eventType, data);
   }
 }

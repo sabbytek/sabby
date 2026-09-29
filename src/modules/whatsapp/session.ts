@@ -38,7 +38,10 @@ function sessionKey(phoneNumberId: string, from: string): string {
   return `wa:session:${phoneNumberId}:${from}`;
 }
 
-export async function getSession(phoneNumberId: string, from: string): Promise<WhatsAppSession | null> {
+export async function getSession(
+  phoneNumberId: string,
+  from: string,
+): Promise<WhatsAppSession | null> {
   return cacheGet<WhatsAppSession>(sessionKey(phoneNumberId, from));
 }
 

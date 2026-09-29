@@ -18,60 +18,76 @@ const guard = [requireAuth, resolveTenant, requireFeature('customers:manage')];
 export default async function customersRoutes(app: FastifyInstance) {
   const typed = app.withTypeProvider<ZodTypeProvider>();
 
-  typed.post('/', {
-    preHandler: guard,
-    schema: {
-      tags: ['Customers'],
-      summary: 'Create a customer record',
-      security: [{ bearerAuth: [] }],
-      body: createCustomerBodySchema,
+  typed.post(
+    '/',
+    {
+      preHandler: guard,
+      schema: {
+        tags: ['Customers'],
+        summary: 'Create a customer record',
+        security: [{ bearerAuth: [] }],
+        body: createCustomerBodySchema,
+      },
     },
-  }, async (request, reply) => {
-    const ctx = createContext(request);
-    const customer = await controller.create(ctx, request.body);
-    sendCreated(reply, customer);
-  });
+    async (request, reply) => {
+      const ctx = createContext(request);
+      const customer = await controller.create(ctx, request.body);
+      return sendCreated(reply, customer);
+    },
+  );
 
-  typed.get('/', {
-    preHandler: guard,
-    schema: {
-      tags: ['Customers'],
-      summary: 'List customers (paginated, searchable)',
-      security: [{ bearerAuth: [] }],
-      querystring: listCustomersQuerySchema,
+  typed.get(
+    '/',
+    {
+      preHandler: guard,
+      schema: {
+        tags: ['Customers'],
+        summary: 'List customers (paginated, searchable)',
+        security: [{ bearerAuth: [] }],
+        querystring: listCustomersQuerySchema,
+      },
     },
-  }, async (request, reply) => {
-    const ctx = createContext(request);
-    const result = await controller.list(ctx, request.query);
-    sendSuccess(reply, result);
-  });
+    async (request, reply) => {
+      const ctx = createContext(request);
+      const result = await controller.list(ctx, request.query);
+      return sendSuccess(reply, result);
+    },
+  );
 
-  typed.get('/:id', {
-    preHandler: guard,
-    schema: {
-      tags: ['Customers'],
-      summary: 'Get a customer record',
-      security: [{ bearerAuth: [] }],
-      params: idParamsSchema,
+  typed.get(
+    '/:id',
+    {
+      preHandler: guard,
+      schema: {
+        tags: ['Customers'],
+        summary: 'Get a customer record',
+        security: [{ bearerAuth: [] }],
+        params: idParamsSchema,
+      },
     },
-  }, async (request, reply) => {
-    const ctx = createContext(request);
-    const customer = await controller.get(ctx, request.params.id);
-    sendSuccess(reply, customer);
-  });
+    async (request, reply) => {
+      const ctx = createContext(request);
+      const customer = await controller.get(ctx, request.params.id);
+      return sendSuccess(reply, customer);
+    },
+  );
 
-  typed.patch('/:id', {
-    preHandler: guard,
-    schema: {
-      tags: ['Customers'],
-      summary: 'Update a customer record',
-      security: [{ bearerAuth: [] }],
-      params: idParamsSchema,
-      body: updateCustomerBodySchema,
+  typed.patch(
+    '/:id',
+    {
+      preHandler: guard,
+      schema: {
+        tags: ['Customers'],
+        summary: 'Update a customer record',
+        security: [{ bearerAuth: [] }],
+        params: idParamsSchema,
+        body: updateCustomerBodySchema,
+      },
     },
-  }, async (request, reply) => {
-    const ctx = createContext(request);
-    const customer = await controller.update(ctx, request.params.id, request.body);
-    sendSuccess(reply, customer);
-  });
+    async (request, reply) => {
+      const ctx = createContext(request);
+      const customer = await controller.update(ctx, request.params.id, request.body);
+      return sendSuccess(reply, customer);
+    },
+  );
 }

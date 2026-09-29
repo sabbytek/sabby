@@ -6,9 +6,11 @@ export const webhookVerifyQuerySchema = z.object({
   'hub.challenge': z.string(),
 });
 
-export const setupBodySchema = z.object({
-  phoneNumberId: z.string(),
-}).strict();
+export const setupBodySchema = z
+  .object({
+    phoneNumberId: z.string(),
+  })
+  .strict();
 
 export type WebhookVerifyQuery = z.infer<typeof webhookVerifyQuerySchema>;
 export type SetupBody = z.infer<typeof setupBodySchema>;

@@ -16,7 +16,7 @@ export async function createCustomer(
     address?: string;
     note?: string;
     consentGivenAt?: string; // ISO 8601 — the moment the customer consented to data collection
-    consentSource?: string;  // 'pos_signup' | 'whatsapp_chat' | 'web_checkout' | 'manual'
+    consentSource?: string; // 'pos_signup' | 'whatsapp_chat' | 'web_checkout' | 'manual'
   },
 ) {
   return withTenantSchema(schemaName, async (db) => {

@@ -1,12 +1,7 @@
 import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { withTenantSchema } from '../../shared/db/tenant.js';
-import {
-  categories,
-  productVariants,
-  products,
-  customers,
-} from '../../shared/db/schema/tenant.js';
+import { categories, productVariants, products, customers } from '../../shared/db/schema/tenant.js';
 import { createOrder } from '../orders/service.js';
 import { initiatePayment } from '../payments/service.js';
 import {
@@ -16,13 +11,7 @@ import {
   type WhatsAppSession,
   type CartItem,
 } from './session.js';
-import {
-  sendText,
-  sendList,
-  sendButtons,
-  formatNaira,
-  type ListRow,
-} from './sender.js';
+import { sendText, sendList, sendButtons, formatNaira, type ListRow } from './sender.js';
 
 // ─── Entry point ──────────────────────────────────────────────────────────────
 
@@ -38,18 +27,20 @@ export async function handleInboundMessage(
   let session = await getSession(phoneNumberId, from);
 
   // New session or expired
-  if (!session) {
-    session = {
-      state: 'greeting',
-      tenantId,
-      schemaName,
-      cart: [],
-    };
-  }
+  session ??= {
+    state: 'greeting',
+    tenantId,
+    schemaName,
+    cart: [],
+  };
 
   // Global shortcut: "cart" at any point
   const bodyLower = messageBody.trim().toLowerCase();
-  if (bodyLower === 'cart' && session.state !== 'checkout_name' && session.state !== 'checkout_address') {
+  if (
+    bodyLower === 'cart' &&
+    session.state !== 'checkout_name' &&
+    session.state !== 'checkout_address'
+  ) {
     session.state = 'cart';
   }
 
@@ -82,11 +73,20 @@ export async function handleInboundMessage(
       await handleCheckoutAddress(phoneNumberId, from, session, tenantId, schemaName, messageBody);
       break;
     case 'awaiting_payment':
-      await sendText(phoneNumberId, from, 'Your order is still pending payment. Please use the payment link sent earlier to complete your purchase.');
+      await sendText(
+        phoneNumberId,
+        from,
+        'Your order is still pending payment. Please use the payment link sent earlier to complete your purchase.',
+      );
       break;
     case 'confirmed':
       await clearSession(phoneNumberId, from);
-      await handleGreeting(phoneNumberId, from, { ...session, state: 'greeting', cart: [] }, schemaName);
+      await handleGreeting(
+        phoneNumberId,
+        from,
+        { ...session, state: 'greeting', cart: [] },
+        schemaName,
+      );
       break;
   }
 }
@@ -100,13 +100,15 @@ async function handleGreeting(
   schemaName: string,
 ): Promise<void> {
   const cats = await withTenantSchema(schemaName, async (db) =>
-    db.select({ id: categories.id, name: categories.name })
-      .from(categories)
-      .limit(10),
+    db.select({ id: categories.id, name: categories.name }).from(categories).limit(10),
   );
 
   if (cats.length === 0) {
-    await sendText(phoneNumberId, from, 'Welcome! Our store is being set up. Please check back soon.');
+    await sendText(
+      phoneNumberId,
+      from,
+      'Welcome! Our store is being set up. Please check back soon.',
+    );
     return;
   }
 
@@ -114,12 +116,9 @@ async function handleGreeting(
   const updated: WhatsAppSession = { ...session, state: 'browsing', cart: session.cart };
   await saveSession(phoneNumberId, from, updated);
 
-  await sendList(
-    phoneNumberId, from,
-    'Welcome! Browse our product categories below:',
-    'Browse',
-    [{ title: 'Categories', rows }],
-  );
+  await sendList(phoneNumberId, from, 'Welcome! Browse our product categories below:', 'Browse', [
+    { title: 'Categories', rows },
+  ]);
 }
 
 async function handleBrowsing(
@@ -130,7 +129,11 @@ async function handleBrowsing(
   interactiveId: string | null,
 ): Promise<void> {
   if (!interactiveId?.startsWith('cat:')) {
-    await sendText(phoneNumberId, from, 'Please select a category from the list. Type "menu" to restart.');
+    await sendText(
+      phoneNumberId,
+      from,
+      'Please select a category from the list. Type "menu" to restart.',
+    );
     return;
   }
 
@@ -157,7 +160,11 @@ async function handleBrowsing(
   );
 
   if (variants.length === 0) {
-    await sendText(phoneNumberId, from, 'No products found in this category. Type "menu" to browse other categories.');
+    await sendText(
+      phoneNumberId,
+      from,
+      'No products found in this category. Type "menu" to browse other categories.',
+    );
     return;
   }
 
@@ -167,15 +174,16 @@ async function handleBrowsing(
     description: formatNaira(v.priceKobo),
   }));
 
-  const updated: WhatsAppSession = { ...session, state: 'products', selectedCategoryId: categoryId };
+  const updated: WhatsAppSession = {
+    ...session,
+    state: 'products',
+    selectedCategoryId: categoryId,
+  };
   await saveSession(phoneNumberId, from, updated);
 
-  await sendList(
-    phoneNumberId, from,
-    'Select a product to view details:',
-    'Select',
-    [{ title: 'Products', rows }],
-  );
+  await sendList(phoneNumberId, from, 'Select a product to view details:', 'Select', [
+    { title: 'Products', rows },
+  ]);
 }
 
 async function handleProducts(
@@ -186,7 +194,11 @@ async function handleProducts(
   interactiveId: string | null,
 ): Promise<void> {
   if (!interactiveId?.startsWith('var:')) {
-    await sendText(phoneNumberId, from, 'Please select a product from the list. Type "menu" to restart.');
+    await sendText(
+      phoneNumberId,
+      from,
+      'Please select a product from the list. Type "menu" to restart.',
+    );
     return;
   }
 
@@ -211,11 +223,16 @@ async function handleProducts(
     return;
   }
 
-  const updated: WhatsAppSession = { ...session, state: 'product_detail', selectedVariantId: variantId };
+  const updated: WhatsAppSession = {
+    ...session,
+    state: 'product_detail',
+    selectedVariantId: variantId,
+  };
   await saveSession(phoneNumberId, from, updated);
 
   await sendButtons(
-    phoneNumberId, from,
+    phoneNumberId,
+    from,
     `*${variant.productName} – ${variant.name}*\nPrice: ${formatNaira(variant.priceKobo)}\n\nWould you like to add this to your cart?`,
     [
       { id: `add:${variantId}`, title: 'Add to Cart' },
@@ -315,20 +332,21 @@ async function handleCart(
   }
 
   const total = session.cart.reduce((sum, i) => sum + i.priceKobo * i.quantity, 0);
-  const lines = session.cart.map((i) => `• ${i.productName} – ${i.variantName} x${i.quantity}: ${formatNaira(i.priceKobo * i.quantity)}`).join('\n');
+  const lines = session.cart
+    .map(
+      (i) =>
+        `• ${i.productName} – ${i.variantName} x${i.quantity}: ${formatNaira(i.priceKobo * i.quantity)}`,
+    )
+    .join('\n');
   const cartText = `🛒 *Your Cart*\n\n${lines}\n\n*Total: ${formatNaira(total)}*`;
 
   const updated: WhatsAppSession = { ...session, state: 'cart' };
   await saveSession(phoneNumberId, from, updated);
 
-  await sendButtons(
-    phoneNumberId, from,
-    cartText,
-    [
-      { id: 'checkout', title: 'Checkout' },
-      { id: 'browse-more', title: 'Continue Shopping' },
-    ],
-  );
+  await sendButtons(phoneNumberId, from, cartText, [
+    { id: 'checkout', title: 'Checkout' },
+    { id: 'browse-more', title: 'Continue Shopping' },
+  ]);
 }
 
 async function handleCheckoutName(
@@ -420,7 +438,8 @@ async function handleCheckoutAddress(
 
   const total = session.cart.reduce((sum, i) => sum + i.priceKobo * i.quantity, 0);
   await sendText(
-    phoneNumberId, from,
+    phoneNumberId,
+    from,
     `Order confirmed! 🎉\n\nOrder #${order.orderNumber}\nTotal: ${formatNaira(total)}\n\nComplete your payment here:\n${authorizationUrl}\n\nYour order will be processed after payment. Thank you, ${customerName}!`,
   );
 }
@@ -436,7 +455,8 @@ export async function confirmWhatsAppOrder(
   if (!session) return;
 
   await sendText(
-    phoneNumberId, customerPhone,
+    phoneNumberId,
+    customerPhone,
     `✅ Payment received! Your order *${orderNumber}* is confirmed and being processed. Thank you for shopping with us!`,
   );
 

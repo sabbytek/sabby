@@ -40,8 +40,8 @@ export function orderPaidTemplate(
   amountKobo: number,
 ): JournalEntryDraft {
   const lines: JournalLine[] = [
-    { accountCode: '1000', type: 'debit', amountKobo },   // Cash ↑
-    { accountCode: '4000', type: 'credit', amountKobo },  // Revenue ↑
+    { accountCode: '1000', type: 'debit', amountKobo }, // Cash ↑
+    { accountCode: '4000', type: 'credit', amountKobo }, // Revenue ↑
   ];
   assertBalanced(lines);
   return {
@@ -55,8 +55,8 @@ export function orderPaidTemplate(
 // When a payment gateway fee is deducted from the settlement.
 export function paymentFeeTemplate(paymentId: string, feeKobo: number): JournalEntryDraft {
   const lines: JournalLine[] = [
-    { accountCode: '5100', type: 'debit', amountKobo: feeKobo },   // Fee expense ↑
-    { accountCode: '1000', type: 'credit', amountKobo: feeKobo },  // Cash ↓
+    { accountCode: '5100', type: 'debit', amountKobo: feeKobo }, // Fee expense ↑
+    { accountCode: '1000', type: 'credit', amountKobo: feeKobo }, // Cash ↓
   ];
   assertBalanced(lines);
   return {
@@ -68,13 +68,10 @@ export function paymentFeeTemplate(paymentId: string, feeKobo: number): JournalE
 }
 
 // When a refund is issued to a customer.
-export function orderRefundedTemplate(
-  paymentId: string,
-  amountKobo: number,
-): JournalEntryDraft {
+export function orderRefundedTemplate(paymentId: string, amountKobo: number): JournalEntryDraft {
   const lines: JournalLine[] = [
-    { accountCode: '5300', type: 'debit', amountKobo },   // Refund expense ↑
-    { accountCode: '1000', type: 'credit', amountKobo },  // Cash ↓
+    { accountCode: '5300', type: 'debit', amountKobo }, // Refund expense ↑
+    { accountCode: '1000', type: 'credit', amountKobo }, // Cash ↓
   ];
   assertBalanced(lines);
   return {
@@ -92,8 +89,8 @@ export function expenseRecordedTemplate(
   description: string,
 ): JournalEntryDraft {
   const lines: JournalLine[] = [
-    { accountCode: '5200', type: 'debit', amountKobo },   // Operating expense ↑
-    { accountCode: '1000', type: 'credit', amountKobo },  // Cash ↓
+    { accountCode: '5200', type: 'debit', amountKobo }, // Operating expense ↑
+    { accountCode: '1000', type: 'credit', amountKobo }, // Cash ↓
   ];
   assertBalanced(lines);
   return {
@@ -105,13 +102,10 @@ export function expenseRecordedTemplate(
 }
 
 // When a delivery fee is collected from the customer (revenue for the merchant).
-export function deliveryFeeCollectedTemplate(
-  orderId: string,
-  feeKobo: number,
-): JournalEntryDraft {
+export function deliveryFeeCollectedTemplate(orderId: string, feeKobo: number): JournalEntryDraft {
   const lines: JournalLine[] = [
-    { accountCode: '1000', type: 'debit', amountKobo: feeKobo },   // Cash ↑
-    { accountCode: '4000', type: 'credit', amountKobo: feeKobo },  // Revenue ↑
+    { accountCode: '1000', type: 'debit', amountKobo: feeKobo }, // Cash ↑
+    { accountCode: '4000', type: 'credit', amountKobo: feeKobo }, // Revenue ↑
   ];
   assertBalanced(lines);
   return {
@@ -123,13 +117,10 @@ export function deliveryFeeCollectedTemplate(
 }
 
 // When the merchant pays the logistics provider for dispatch.
-export function logisticsCostTemplate(
-  orderId: string,
-  costKobo: number,
-): JournalEntryDraft {
+export function logisticsCostTemplate(orderId: string, costKobo: number): JournalEntryDraft {
   const lines: JournalLine[] = [
-    { accountCode: '5400', type: 'debit', amountKobo: costKobo },   // Logistics cost ↑
-    { accountCode: '1000', type: 'credit', amountKobo: costKobo },  // Cash ↓
+    { accountCode: '5400', type: 'debit', amountKobo: costKobo }, // Logistics cost ↑
+    { accountCode: '1000', type: 'credit', amountKobo: costKobo }, // Cash ↓
   ];
   assertBalanced(lines);
   return {

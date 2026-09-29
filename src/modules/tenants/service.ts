@@ -86,7 +86,13 @@ export async function createTenant(input: CreateTenantInput): Promise<CreateTena
       { id: uuid(), code: '3000', name: 'Owner Equity', type: 'equity', isSystem: true },
       { id: uuid(), code: '4000', name: 'Revenue', type: 'revenue', isSystem: true },
       { id: uuid(), code: '5000', name: 'Cost of Goods Sold', type: 'expense', isSystem: true },
-      { id: uuid(), code: '5100', name: 'Payment Processing Fees', type: 'expense', isSystem: true },
+      {
+        id: uuid(),
+        code: '5100',
+        name: 'Payment Processing Fees',
+        type: 'expense',
+        isSystem: true,
+      },
       { id: uuid(), code: '5200', name: 'Operating Expenses', type: 'expense', isSystem: true },
       { id: uuid(), code: '5300', name: 'Refunds', type: 'expense', isSystem: true },
     ]);

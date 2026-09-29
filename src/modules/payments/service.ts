@@ -1,10 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { eq, and } from 'drizzle-orm';
 import { withTenantSchema } from '../../shared/db/tenant.js';
-import {
-  payments,
-  orders,
-} from '../../shared/db/schema/tenant.js';
+import { payments, orders } from '../../shared/db/schema/tenant.js';
 import { NotFoundError, ValidationError } from '../../shared/errors/types.js';
 import { getGateway } from '../../shared/payments/index.js';
 import { postJournalEntry } from '../ledger/service.js';
@@ -14,10 +11,6 @@ import {
   orderRefundedTemplate,
 } from '../ledger/templates.js';
 import { env } from '../../config/env.js';
-import { paymentsQueue } from '../../shared/queue/client.js';
-import { db } from '../../shared/db/client.js';
-import { tenants } from '../../shared/db/schema/public.js';
-import type { ReceiptJobData } from '../../shared/queue/workers/payments.worker.js';
 
 // ─── Initiate payment ─────────────────────────────────────────────────────────
 
@@ -28,11 +21,7 @@ export async function initiatePayment(
   customerEmail: string,
 ) {
   const order = await withTenantSchema(schemaName, async (db) => {
-    const [o] = await db
-      .select()
-      .from(orders)
-      .where(eq(orders.id, orderId))
-      .limit(1);
+    const [o] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
     if (!o) throw new NotFoundError('Order', orderId);
     if (o.paymentStatus === 'paid') {
       throw new ValidationError('Order has already been paid');
@@ -61,7 +50,8 @@ export async function initiatePayment(
       status: 'initiated',
     });
 
-    await db.update(orders)
+    await db
+      .update(orders)
       .set({ paymentStatus: 'initiated', updatedAt: new Date() })
       .where(eq(orders.id, orderId));
   });
@@ -71,14 +61,14 @@ export async function initiatePayment(
 
 // ─── Handle Paystack webhook event ───────────────────────────────────────────
 
+// `string & {}` keeps the known event literals as editor hints without letting
+// TypeScript collapse the whole union down to `string`, while still accepting
+// any other event Paystack may send.
 export type PaystackEventType =
-  | 'charge.success'
-  | 'charge.failed'
-  | 'refund.processed'
-  | string;
+  'charge.success' | 'charge.failed' | 'refund.processed' | (string & {});
 
 export interface PaystackWebhookData {
-  id: string | number;     // Paystack event ID
+  id: string | number; // Paystack event ID
   reference?: string;
   amount?: number;
   fees?: number;
@@ -88,7 +78,6 @@ export interface PaystackWebhookData {
 }
 
 export async function handlePaystackWebhook(
-  tenantId: string,
   schemaName: string,
   eventType: PaystackEventType,
   data: PaystackWebhookData,
@@ -122,7 +111,8 @@ export async function handlePaystackWebhook(
       if (!payment) return; // Orphan event — skip
 
       // Mark payment as paid
-      await db.update(payments)
+      await db
+        .update(payments)
         .set({
           status: 'paid',
           gatewayEventId,
@@ -133,38 +123,31 @@ export async function handlePaystackWebhook(
         .where(eq(payments.id, payment.id));
 
       // Update order payment status
-      await db.update(orders)
+      await db
+        .update(orders)
         .set({ paymentStatus: 'paid', updatedAt: new Date() })
         .where(eq(orders.id, payment.orderId));
 
       // Post journal entries (non-blocking on failure — payment is already recorded)
-      await postJournalEntry(schemaName, orderPaidTemplate(payment.id, payment.orderId, amountKobo))
-        .catch(() => {}); // Journal failure must never roll back the payment
+      await postJournalEntry(
+        schemaName,
+        orderPaidTemplate(payment.id, payment.orderId, amountKobo),
+      ).catch(() => {
+        /* non-fatal: secondary failure intentionally ignored */
+      }); // Journal failure must never roll back the payment
 
       if (feeKobo > 0) {
-        await postJournalEntry(schemaName, paymentFeeTemplate(payment.id, feeKobo))
-          .catch(() => {});
+        await postJournalEntry(schemaName, paymentFeeTemplate(payment.id, feeKobo)).catch(() => {
+          /* non-fatal: secondary failure intentionally ignored */
+        });
       }
-
-      // Enqueue automated receipt delivery (non-blocking)
-      const [tenant] = await db
-        .select({ name: tenants.name })
-        .from(tenants)
-        .where(eq(tenants.id, tenantId))
-        .limit(1);
-
-      await paymentsQueue.add('send-receipt', {
-        tenantId,
-        schemaName,
-        orderId: payment.orderId,
-        businessName: tenant?.name ?? '',
-      } satisfies ReceiptJobData).catch(() => {}); // receipt failure must not affect payment
     });
   }
 
   if (eventType === 'charge.failed') {
     await withTenantSchema(schemaName, async (db) => {
-      await db.update(payments)
+      await db
+        .update(payments)
         .set({ status: 'failed', gatewayEventId, updatedAt: new Date() })
         .where(and(eq(payments.gatewayReference, reference), eq(payments.status, 'initiated')));
     });
@@ -182,16 +165,21 @@ export async function handlePaystackWebhook(
 
       if (!payment) return;
 
-      await db.update(payments)
+      await db
+        .update(payments)
         .set({ status: 'refunded', gatewayEventId, updatedAt: new Date() })
         .where(eq(payments.id, payment.id));
 
-      await db.update(orders)
+      await db
+        .update(orders)
         .set({ paymentStatus: 'refunded', updatedAt: new Date() })
         .where(eq(orders.id, payment.orderId));
 
-      await postJournalEntry(schemaName, orderRefundedTemplate(payment.id, amountKobo))
-        .catch(() => {});
+      await postJournalEntry(schemaName, orderRefundedTemplate(payment.id, amountKobo)).catch(
+        () => {
+          /* non-fatal: secondary failure intentionally ignored */
+        },
+      );
     });
   }
 

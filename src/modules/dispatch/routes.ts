@@ -22,85 +22,115 @@ export default async function dispatchRoutes(app: FastifyInstance) {
 
   // ─── Configure logistics provider ──────────────────────────────────────────
 
-  typed.post('/configure', {
-    preHandler: [requireAuth, resolveTenant, requireFeature('logistics:dispatch'), requireManager],
-    schema: {
-      tags: ['Dispatch'],
-      summary: 'Configure logistics provider for this tenant',
-      description:
-        'Store encrypted API key + webhook secret for a logistics provider (e.g. traka). ' +
-        'For TRAKA: the merchant must first register on TRAKA, get approved, and create an API key. ' +
-        'BPOS stores the key encrypted — it is never returned in plaintext.',
-      body: configureDispatchBodySchema,
+  typed.post(
+    '/configure',
+    {
+      preHandler: [
+        requireAuth,
+        resolveTenant,
+        requireFeature('logistics:dispatch'),
+        requireManager,
+      ],
+      schema: {
+        tags: ['Dispatch'],
+        summary: 'Configure logistics provider for this tenant',
+        description:
+          'Store encrypted API key + webhook secret for a logistics provider (e.g. traka). ' +
+          'For TRAKA: the merchant must first register on TRAKA, get approved, and create an API key. ' +
+          'BPOS stores the key encrypted — it is never returned in plaintext.',
+        body: configureDispatchBodySchema,
+      },
     },
-  }, async (request, reply) => {
-    const ctx = createContext(request);
-    const result = await controller.configure(ctx, request.body);
-    sendSuccess(reply, result);
-  });
+    async (request, reply) => {
+      const ctx = createContext(request);
+      const result = await controller.configure(ctx, request.body);
+      return sendSuccess(reply, result);
+    },
+  );
 
   // ─── Get dispatch config (key masked) ──────────────────────────────────────
 
-  typed.get('/config', {
-    preHandler: [requireAuth, resolveTenant, requireFeature('logistics:dispatch')],
-    schema: {
-      tags: ['Dispatch'],
-      summary: 'Get current logistics provider configuration',
+  typed.get(
+    '/config',
+    {
+      preHandler: [requireAuth, resolveTenant, requireFeature('logistics:dispatch')],
+      schema: {
+        tags: ['Dispatch'],
+        summary: 'Get current logistics provider configuration',
+      },
     },
-  }, async (request, reply) => {
-    const ctx = createContext(request);
-    const config = await controller.getConfig(ctx);
-    sendSuccess(reply, config);
-  });
+    async (request, reply) => {
+      const ctx = createContext(request);
+      const config = await controller.getConfig(ctx);
+      return sendSuccess(reply, config);
+    },
+  );
 
   // ─── Get shipping quote ────────────────────────────────────────────────────
 
-  typed.post('/quote', {
-    preHandler: [requireAuth, resolveTenant, requireFeature('logistics:dispatch')],
-    schema: {
-      tags: ['Dispatch'],
-      summary: 'Get a shipping fee quote',
-      body: quoteBodySchema,
+  typed.post(
+    '/quote',
+    {
+      preHandler: [requireAuth, resolveTenant, requireFeature('logistics:dispatch')],
+      schema: {
+        tags: ['Dispatch'],
+        summary: 'Get a shipping fee quote',
+        body: quoteBodySchema,
+      },
     },
-  }, async (request, reply) => {
-    const ctx = createContext(request);
-    const result = await controller.quote(ctx, request.body);
-    sendSuccess(reply, result);
-  });
+    async (request, reply) => {
+      const ctx = createContext(request);
+      const result = await controller.quote(ctx, request.body);
+      return sendSuccess(reply, result);
+    },
+  );
 
   // ─── Dispatch an order ─────────────────────────────────────────────────────
 
-  typed.post('/:orderId/dispatch', {
-    preHandler: [requireAuth, resolveTenant, requireFeature('logistics:dispatch'), requireManager],
-    schema: {
-      tags: ['Dispatch'],
-      summary: 'Dispatch an order via the configured logistics provider',
-      description:
-        'Order must be in PROCESSING status and have a deliveryAddress set. ' +
-        'On success the order transitions to DISPATCHED.',
-      params: dispatchOrderParamsSchema,
-      body: dispatchOrderBodySchema,
+  typed.post(
+    '/:orderId/dispatch',
+    {
+      preHandler: [
+        requireAuth,
+        resolveTenant,
+        requireFeature('logistics:dispatch'),
+        requireManager,
+      ],
+      schema: {
+        tags: ['Dispatch'],
+        summary: 'Dispatch an order via the configured logistics provider',
+        description:
+          'Order must be in PROCESSING status and have a deliveryAddress set. ' +
+          'On success the order transitions to DISPATCHED.',
+        params: dispatchOrderParamsSchema,
+        body: dispatchOrderBodySchema,
+      },
     },
-  }, async (request, reply) => {
-    const ctx = createContext(request);
-    const result = await controller.dispatch(ctx, request.params.orderId, request.body);
-    sendSuccess(reply, result);
-  });
+    async (request, reply) => {
+      const ctx = createContext(request);
+      const result = await controller.dispatch(ctx, request.params.orderId, request.body);
+      return sendSuccess(reply, result);
+    },
+  );
 
   // ─── Track shipment ────────────────────────────────────────────────────────
 
-  typed.get('/:orderId/track', {
-    preHandler: [requireAuth, resolveTenant, requireFeature('logistics:dispatch')],
-    schema: {
-      tags: ['Dispatch'],
-      summary: 'Get live tracking status for a dispatched order',
-      params: trackParamsSchema,
+  typed.get(
+    '/:orderId/track',
+    {
+      preHandler: [requireAuth, resolveTenant, requireFeature('logistics:dispatch')],
+      schema: {
+        tags: ['Dispatch'],
+        summary: 'Get live tracking status for a dispatched order',
+        params: trackParamsSchema,
+      },
     },
-  }, async (request, reply) => {
-    const ctx = createContext(request);
-    const result = await controller.track(ctx, request.params.orderId);
-    sendSuccess(reply, result);
-  });
+    async (request, reply) => {
+      const ctx = createContext(request);
+      const result = await controller.track(ctx, request.params.orderId);
+      return sendSuccess(reply, result);
+    },
+  );
 
   // ─── Inbound webhook from logistics provider ───────────────────────────────
 
@@ -108,7 +138,9 @@ export default async function dispatchRoutes(app: FastifyInstance) {
     webhookPlugin.addContentTypeParser(
       'application/json',
       { parseAs: 'buffer' },
-      (_req, body, done) => { done(null, body); },
+      (_req, body, done) => {
+        done(null, body);
+      },
     );
 
     webhookPlugin.post(

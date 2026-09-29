@@ -74,5 +74,7 @@ export function eventTypeToDispatchStatus(
   }
 }
 
-const SUPPORTED_PROVIDERS = ['sendstack', 'gig', 'dhl', 'kwik'] as const;
-export type ProviderName = (typeof SUPPORTED_PROVIDERS)[number] | string;
+// Provider name is an open string: it is read from tenant integration config
+// at runtime and matched by getGateway(), which falls back to a generic gateway
+// for anything it does not recognise.
+export type ProviderName = string;

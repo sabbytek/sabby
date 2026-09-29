@@ -1,12 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { withTenantSchema } from '../../shared/db/tenant.js';
 import { db } from '../../shared/db/client.js';
-import {
-  users,
-  products,
-  payments,
-  locations,
-} from '../../shared/db/schema/tenant.js';
+import { users, products, payments, locations } from '../../shared/db/schema/tenant.js';
 import { tenants } from '../../shared/db/schema/public.js';
 
 export interface OnboardingStatus {

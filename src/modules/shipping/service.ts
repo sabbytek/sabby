@@ -19,7 +19,8 @@ export async function createShippingZone(
   input: { name: string; states: string[] },
 ) {
   const invalid = input.states.filter((s) => !isValidNgState(s));
-  if (invalid.length > 0) throw new ValidationError(`Invalid Nigerian state(s): ${invalid.join(', ')}`);
+  if (invalid.length > 0)
+    throw new ValidationError(`Invalid Nigerian state(s): ${invalid.join(', ')}`);
 
   return withTenantSchema(schemaName, async (db) => {
     const id = uuidv4();
@@ -40,7 +41,8 @@ export async function updateShippingZone(
 ) {
   if (input.states) {
     const invalid = input.states.filter((s) => !isValidNgState(s));
-    if (invalid.length > 0) throw new ValidationError(`Invalid Nigerian state(s): ${invalid.join(', ')}`);
+    if (invalid.length > 0)
+      throw new ValidationError(`Invalid Nigerian state(s): ${invalid.join(', ')}`);
   }
   return withTenantSchema(schemaName, async (db) => {
     await db
@@ -59,13 +61,7 @@ export async function deleteShippingZone(schemaName: string, zoneId: string) {
 // ─── Shipping Methods ─────────────────────────────────────────────────────────
 
 export type ShippingMethodType =
-  | 'flat_rate'
-  | 'zone_rate'
-  | 'value_rate'
-  | 'weight_rate'
-  | 'automated'
-  | 'free'
-  | 'pick_up';
+  'flat_rate' | 'zone_rate' | 'value_rate' | 'weight_rate' | 'automated' | 'free' | 'pick_up';
 
 export interface CreateShippingMethodInput {
   name: string;
@@ -84,10 +80,7 @@ export interface CreateShippingMethodInput {
   merchantCostKobo?: number;
 }
 
-export async function createShippingMethod(
-  schemaName: string,
-  input: CreateShippingMethodInput,
-) {
+export async function createShippingMethod(schemaName: string, input: CreateShippingMethodInput) {
   if (input.type === 'flat_rate' && input.flatRateKobo === undefined) {
     throw new ValidationError('flatRateKobo is required for flat_rate methods');
   }
@@ -193,11 +186,7 @@ export async function deleteShippingRate(schemaName: string, rateId: string) {
 // ─── Free Shipping Conditions ─────────────────────────────────────────────────
 
 export type FreeShippingConditionType =
-  | 'always'
-  | 'min_order_value'
-  | 'product'
-  | 'category'
-  | 'promo_code';
+  'always' | 'min_order_value' | 'product' | 'category' | 'promo_code';
 
 export interface AddFreeShippingConditionInput {
   conditionType: FreeShippingConditionType;
@@ -275,7 +264,7 @@ export type PickupLocationType = 'merchant_branch' | 'third_party';
 export interface CreatePickupLocationInput {
   name: string;
   locationType: PickupLocationType;
-  locationId?: string;  // required when locationType = 'merchant_branch'
+  locationId?: string; // required when locationType = 'merchant_branch'
   providerName?: string;
   address: string;
   state?: string;
@@ -283,10 +272,7 @@ export interface CreatePickupLocationInput {
   operatingHours?: string;
 }
 
-export async function createPickupLocation(
-  schemaName: string,
-  input: CreatePickupLocationInput,
-) {
+export async function createPickupLocation(schemaName: string, input: CreatePickupLocationInput) {
   if (input.locationType === 'merchant_branch' && !input.locationId) {
     throw new ValidationError('locationId is required for merchant_branch pick-up locations');
   }

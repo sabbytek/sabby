@@ -44,7 +44,7 @@ interface TrakaTrackResponse {
   tracking_number: string;
   status: string;
   current_location?: string;
-  events: Array<{ status: string; timestamp: string; location?: string }>;
+  events: { status: string; timestamp: string; location?: string }[];
 }
 
 async function trakaRequest<T>(path: string, apiKey: string, init?: RequestInit): Promise<T> {
@@ -87,8 +87,7 @@ export const trakaGateway: DispatchGateway = {
 
   async createShipment(input, apiKey) {
     // Derive size from weight (BPOS convention: <1 kg → SMALL, 1–5 kg → MEDIUM, >5 kg → LARGE)
-    const size: TrakaSize =
-      input.weightKg < 1 ? 'SMALL' : input.weightKg <= 5 ? 'MEDIUM' : 'LARGE';
+    const size: TrakaSize = input.weightKg < 1 ? 'SMALL' : input.weightKg <= 5 ? 'MEDIUM' : 'LARGE';
     const speed: TrakaSpeed = 'STANDARD';
 
     const res = await trakaRequest<TrakaOrderResponse>('/orders', apiKey, {
@@ -124,10 +123,7 @@ export const trakaGateway: DispatchGateway = {
   },
 
   async trackShipment(reference, apiKey) {
-    const res = await trakaRequest<TrakaTrackResponse>(
-      `/external/orders/${reference}`,
-      apiKey,
-    );
+    const res = await trakaRequest<TrakaTrackResponse>(`/external/orders/${reference}`, apiKey);
     return {
       status: res.status,
       ...(res.current_location !== undefined ? { location: res.current_location } : {}),

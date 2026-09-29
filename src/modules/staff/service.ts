@@ -1,6 +1,6 @@
 import argon2 from 'argon2';
 import { v4 as uuidv4 } from 'uuid';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { withTenantSchema } from '../../shared/db/tenant.js';
 import { users } from '../../shared/db/schema/tenant.js';
 import { NotFoundError, ConflictError } from '../../shared/errors/types.js';
@@ -78,7 +78,7 @@ export async function inviteStaff(
       firstName: input.firstName,
       lastName: input.lastName,
       phone: input.phone ?? null,
-      role: input.role as 'owner' | 'manager' | 'staff' | 'viewer',
+      role: input.role,
       locationId: input.locationId ?? null,
     });
 
@@ -128,10 +128,7 @@ export async function updateStaffMember(
     if (input.locationId !== undefined) updateData['locationId'] = input.locationId;
     if (input.isActive !== undefined) updateData['isActive'] = input.isActive;
 
-    await db
-      .update(users)
-      .set(updateData)
-      .where(eq(users.id, userId));
+    await db.update(users).set(updateData).where(eq(users.id, userId));
 
     const [updated] = await db
       .select({

@@ -41,7 +41,7 @@ export async function configureLogistics(
       integrationType: 'logistics',
       providerName,
       apiKeyEncrypted,
-      config: config as unknown as Record<string, unknown>,
+      config: config,
       isActive: true,
     })
     .onConflictDoUpdate({
@@ -49,7 +49,7 @@ export async function configureLogistics(
       set: {
         providerName,
         apiKeyEncrypted,
-        config: config as unknown as Record<string, unknown>,
+        config: config,
         isActive: true,
         updatedAt: new Date(),
       },
@@ -99,7 +99,9 @@ export async function getQuote(
     .limit(1);
 
   if (!integration) {
-    throw new ValidationError('No active logistics provider configured. Call POST /v1/dispatch/configure first.');
+    throw new ValidationError(
+      'No active logistics provider configured. Call POST /v1/dispatch/configure first.',
+    );
   }
 
   const apiKey = decrypt(integration.apiKeyEncrypted);
@@ -142,10 +144,14 @@ export async function dispatchOrder(
 
   if (!order) throw new NotFoundError('Order', orderId);
   if (!order.deliveryAddress) {
-    throw new ValidationError('Order has no delivery address. Set deliveryAddress on the order before dispatching.');
+    throw new ValidationError(
+      'Order has no delivery address. Set deliveryAddress on the order before dispatching.',
+    );
   }
   if (order.status !== 'processing') {
-    throw new ValidationError(`Order must be in 'processing' status to dispatch. Current: '${order.status}'`);
+    throw new ValidationError(
+      `Order must be in 'processing' status to dispatch. Current: '${order.status}'`,
+    );
   }
 
   const apiKey = decrypt(integration.apiKeyEncrypted);

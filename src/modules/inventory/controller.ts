@@ -1,20 +1,12 @@
 import type { RequestContext } from '../../shared/types/controller.js';
-import {
-  listInventory,
-  receiveStock,
-  adjustStock,
-  listMovements,
-  getLowStock,
-  getAvailability,
-  transferStock,
-} from './service.js';
+import { auditUserAction } from '../../shared/audit/tenant-audit.js';
+import { listInventory, receiveStock, adjustStock, listMovements, getLowStock } from './service.js';
 
 export async function list(
   ctx: RequestContext,
   query: { locationId?: string; variantId?: string },
-): Promise<unknown> {
-  const result = await listInventory(ctx.schema, query);
-  return result;
+) {
+  return listInventory(ctx.schema, query);
 }
 
 export async function receive(
@@ -25,8 +17,14 @@ export async function receive(
     quantity: number;
     note?: string;
   },
-): Promise<unknown> {
+) {
   const result = await receiveStock(ctx.schema, ctx.userId, input);
+  await auditUserAction(ctx, {
+    action: 'inventory.stock_received',
+    targetType: 'variant',
+    targetId: input.variantId,
+    metadata: { locationId: input.locationId, quantity: input.quantity },
+  });
   return result;
 }
 
@@ -38,8 +36,15 @@ export async function adjust(
     quantity: number;
     note?: string;
   },
-): Promise<unknown> {
+) {
   const result = await adjustStock(ctx.schema, ctx.userId, input);
+  await auditUserAction(ctx, {
+    action: 'inventory.stock_adjusted',
+    targetType: 'variant',
+    targetId: input.variantId,
+    metadata: { locationId: input.locationId, quantity: input.quantity },
+    ...(input.note && { reason: input.note }),
+  });
   return result;
 }
 
@@ -52,40 +57,16 @@ export async function movements(
     page?: string;
     limit?: string;
   },
-): Promise<unknown> {
-  const result = await listMovements(ctx.schema, {
+) {
+  return listMovements(ctx.schema, {
     ...(query.variantId && { variantId: query.variantId }),
     ...(query.from && { from: query.from }),
     ...(query.to && { to: query.to }),
     ...(query.page && { page: parseInt(query.page) }),
     ...(query.limit && { limit: parseInt(query.limit) }),
   });
-  return result;
 }
 
-export async function lowStock(ctx: RequestContext, locationId?: string): Promise<unknown> {
-  const result = await getLowStock(ctx.schema, locationId);
-  return result;
-}
-
-export async function availability(
-  ctx: RequestContext,
-  query: { sku?: string; variantId?: string },
-): Promise<unknown> {
-  const result = await getAvailability(ctx.schema, query);
-  return result;
-}
-
-export async function transfer(
-  ctx: RequestContext,
-  input: {
-    variantId: string;
-    fromLocationId: string;
-    toLocationId: string;
-    quantity: number;
-    note?: string;
-  },
-): Promise<unknown> {
-  const result = await transferStock(ctx.schema, ctx.userId, input);
-  return result;
+export async function lowStock(ctx: RequestContext, locationId?: string) {
+  return getLowStock(ctx.schema, locationId);
 }
