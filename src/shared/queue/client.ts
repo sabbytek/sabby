@@ -8,7 +8,9 @@ function getRedisConnection(): ConnectionOptions {
     port: parseInt(url.port || '6379'),
     password: url.password || undefined,
     username: url.username || undefined,
-    db: 1,
+    // Upstash only supports DB 0; BullMQ namespaces its keys under `bull:` so
+    // sharing the cache's database is safe.
+    db: 0,
     maxRetriesPerRequest: null, // Required for BullMQ
     // Mirror the cache client's retry cap so a dead Redis host doesn't keep
     // the process alive with infinite reconnect attempts.
