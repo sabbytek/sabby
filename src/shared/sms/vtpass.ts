@@ -26,7 +26,7 @@ export const vtpassProvider: SmsProvider = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${env.VTPASS_API_KEY}`,
+        Authorization: `Bearer ${env.VTPASS_API_KEY}`,
       },
       body: JSON.stringify({
         to,

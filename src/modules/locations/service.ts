@@ -12,11 +12,7 @@ export async function listLocations(schemaName: string) {
 
 export async function getLocation(schemaName: string, locationId: string) {
   return withTenantSchema(schemaName, async (db) => {
-    const [loc] = await db
-      .select()
-      .from(locations)
-      .where(eq(locations.id, locationId))
-      .limit(1);
+    const [loc] = await db.select().from(locations).where(eq(locations.id, locationId)).limit(1);
     if (!loc) throw new NotFoundError('Location', locationId);
     return loc;
   });

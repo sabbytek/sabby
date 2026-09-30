@@ -97,7 +97,7 @@ export async function activateSubscription(
   await db
     .update(tenants)
     .set({
-      planTier: planTier as 'entry' | 'growth' | 'enterprise',
+      planTier: planTier,
       subscriptionStatus: 'active',
       subscriptionExpiresAt: periodEnd,
       updatedAt: new Date(),
@@ -191,6 +191,8 @@ export async function handleSubscriptionBillingWebhook(
     await activateSubscription(schemaName, tenantId, planTier, authorizationCode, customerCode);
   } else if (eventType === 'charge.failed') {
     // Billing failure: enter grace period; cron job will lapse after 7 days
-    await startGracePeriod(schemaName, tenantId).catch(() => {});
+    await startGracePeriod(schemaName, tenantId).catch(() => {
+      /* non-fatal: secondary failure intentionally ignored */
+    });
   }
 }

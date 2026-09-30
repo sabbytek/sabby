@@ -43,7 +43,9 @@ vi.mock('../../src/modules/products/service.js', () => ({
     priceKobo: 25000000,
     isActive: true,
   }),
-  listProducts: vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, totalPages: 0 }),
+  listProducts: vi
+    .fn()
+    .mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, totalPages: 0 }),
   getProduct: vi.fn().mockResolvedValue(null),
   listCategories: vi.fn().mockResolvedValue([]),
   updateProduct: vi.fn(),
@@ -75,9 +77,13 @@ vi.mock('../../src/modules/orders/service.js', () => {
   };
   return {
     createOrder: vi.fn().mockResolvedValue(draft),
-    confirmOrder: vi.fn().mockResolvedValue({ ...draft, status: 'confirmed', paymentStatus: 'pending' }),
+    confirmOrder: vi
+      .fn()
+      .mockResolvedValue({ ...draft, status: 'confirmed', paymentStatus: 'pending' }),
     getOrder: vi.fn().mockResolvedValue(draft),
-    listOrders: vi.fn().mockResolvedValue({ items: [draft], total: 1, page: 1, limit: 20, totalPages: 1 }),
+    listOrders: vi
+      .fn()
+      .mockResolvedValue({ items: [draft], total: 1, page: 1, limit: 20, totalPages: 1 }),
     processOrder: vi.fn(),
     fulfillOrder: vi.fn(),
     cancelOrder: vi.fn(),
@@ -159,7 +165,9 @@ describe('Merchant Journey: onboarding → product → order → payment → rep
     });
 
     expect(res.statusCode).toBe(200);
-    const { data } = res.json<{ data: { percentComplete: number; isComplete: boolean; pendingSteps: string[] } }>();
+    const { data } = res.json<{
+      data: { percentComplete: number; isComplete: boolean; pendingSteps: string[] };
+    }>();
     expect(data.isComplete).toBe(false);
     expect(data.percentComplete).toBe(20);
     expect(data.pendingSteps.length).toBeGreaterThan(0);
@@ -223,7 +231,9 @@ describe('Merchant Journey: onboarding → product → order → payment → rep
     });
 
     expect(res.statusCode).toBe(201);
-    const { data } = res.json<{ data: { orderNumber: string; totalKobo: number; status: string } }>();
+    const { data } = res.json<{
+      data: { orderNumber: string; totalKobo: number; status: string };
+    }>();
     expect(data.orderNumber).toBe('ORD-000001');
     expect(data.status).toBe('draft');
     expect(data.totalKobo).toBe(26875000); // 250,000 + 7.5% VAT = 268,750

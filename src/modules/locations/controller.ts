@@ -1,4 +1,5 @@
 import type { RequestContext } from '../../shared/types/controller.js';
+import { auditUserAction } from '../../shared/audit/tenant-audit.js';
 import {
   listLocations,
   getLocation,
@@ -7,14 +8,12 @@ import {
   deactivateLocation,
 } from './service.js';
 
-export async function list(ctx: RequestContext): Promise<unknown> {
-  const result = await listLocations(ctx.schema);
-  return result;
+export async function list(ctx: RequestContext) {
+  return listLocations(ctx.schema);
 }
 
-export async function get(ctx: RequestContext, id: string): Promise<unknown> {
-  const result = await getLocation(ctx.schema, id);
-  return result;
+export async function get(ctx: RequestContext, id: string) {
+  return getLocation(ctx.schema, id);
 }
 
 export async function create(
@@ -25,9 +24,15 @@ export async function create(
     phone?: string;
     isDefault?: boolean;
   },
-): Promise<unknown> {
-  const result = await createLocation(ctx.schema, input);
-  return result;
+) {
+  const location = await createLocation(ctx.schema, input);
+  await auditUserAction(ctx, {
+    action: 'location.created',
+    targetType: 'location',
+    targetId: location.id,
+    metadata: { name: input.name },
+  });
+  return location;
 }
 
 export async function update(
@@ -40,12 +45,23 @@ export async function update(
     isDefault: boolean;
     isActive: boolean;
   }>,
-): Promise<unknown> {
-  const result = await updateLocation(ctx.schema, id, input);
-  return result;
+) {
+  const location = await updateLocation(ctx.schema, id, input);
+  await auditUserAction(ctx, {
+    action: 'location.updated',
+    targetType: 'location',
+    targetId: id,
+    metadata: { fields: Object.keys(input) },
+  });
+  return location;
 }
 
-export async function deactivate(ctx: RequestContext, id: string): Promise<unknown> {
+export async function deactivate(ctx: RequestContext, id: string) {
   const result = await deactivateLocation(ctx.schema, id);
+  await auditUserAction(ctx, {
+    action: 'location.deactivated',
+    targetType: 'location',
+    targetId: id,
+  });
   return result;
 }

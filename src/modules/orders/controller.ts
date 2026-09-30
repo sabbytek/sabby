@@ -3,6 +3,7 @@
  */
 
 import type { RequestContext } from '../../shared/types/controller.js';
+import { auditUserAction } from '../../shared/audit/tenant-audit.js';
 import type { CreateOrderInput } from './service.js';
 import {
   createOrder,
@@ -13,10 +14,6 @@ import {
   fulfillOrder,
   cancelOrder,
 } from './service.js';
-import { sendPosReceipt } from './receipt.service.js';
-import { db } from '../../shared/db/client.js';
-import { tenants } from '../../shared/db/schema/public.js';
-import { eq } from 'drizzle-orm';
 
 export interface OrderListQuery {
   page?: string;
@@ -38,57 +35,49 @@ function parseOrderQuery(raw: OrderListQuery) {
   };
 }
 
-export async function create(ctx: RequestContext, input: CreateOrderInput): Promise<unknown> {
-  const result = await createOrder(ctx.schema, ctx.userId, input);
-  return result;
+export async function create(ctx: RequestContext, input: CreateOrderInput) {
+  const order = await createOrder(ctx.schema, ctx.userId, input);
+  await auditUserAction(ctx, {
+    action: 'order.created',
+    targetType: 'order',
+    targetId: order.id,
+    metadata: { orderNumber: order.orderNumber, channel: order.channel },
+  });
+  return order;
 }
 
-export async function list(ctx: RequestContext, query: OrderListQuery): Promise<unknown> {
-  const result = await listOrders(ctx.schema, parseOrderQuery(query));
-  return result;
+export async function list(ctx: RequestContext, query: OrderListQuery) {
+  return listOrders(ctx.schema, parseOrderQuery(query));
 }
 
-export async function get(ctx: RequestContext, orderId: string): Promise<unknown> {
-  const result = await getOrder(ctx.schema, orderId);
-  return result;
+export async function get(ctx: RequestContext, orderId: string) {
+  return getOrder(ctx.schema, orderId);
 }
 
-export async function confirm(ctx: RequestContext, orderId: string): Promise<unknown> {
-  const result = await confirmOrder(ctx.schema, ctx.tenantId, orderId, ctx.userId);
-  return result;
+export async function confirm(ctx: RequestContext, orderId: string) {
+  const order = await confirmOrder(ctx.schema, ctx.tenantId, orderId, ctx.userId);
+  await auditUserAction(ctx, { action: 'order.confirmed', targetType: 'order', targetId: orderId });
+  return order;
 }
 
-export async function process(ctx: RequestContext, orderId: string): Promise<unknown> {
-  const result = await processOrder(ctx.schema, orderId);
-  return result;
+export async function process(ctx: RequestContext, orderId: string) {
+  const order = await processOrder(ctx.schema, orderId);
+  await auditUserAction(ctx, {
+    action: 'order.processing',
+    targetType: 'order',
+    targetId: orderId,
+  });
+  return order;
 }
 
-export async function fulfil(ctx: RequestContext, orderId: string): Promise<unknown> {
-  const result = await fulfillOrder(ctx.schema, orderId);
-  return result;
+export async function fulfil(ctx: RequestContext, orderId: string) {
+  const order = await fulfillOrder(ctx.schema, orderId);
+  await auditUserAction(ctx, { action: 'order.fulfilled', targetType: 'order', targetId: orderId });
+  return order;
 }
 
-export async function cancel(ctx: RequestContext, orderId: string): Promise<unknown> {
-  const result = await cancelOrder(ctx.schema, orderId, ctx.userId);
-  return result;
-}
-
-export async function receipt(
-  ctx: RequestContext,
-  orderId: string,
-  channels: Array<'print' | 'whatsapp' | 'email'>,
-): Promise<unknown> {
-  const [tenant] = await db
-    .select({ name: tenants.name })
-    .from(tenants)
-    .where(eq(tenants.id, ctx.tenantId))
-    .limit(1);
-
-  return sendPosReceipt(
-    ctx.tenantId,
-    ctx.schema,
-    orderId,
-    tenant?.name ?? '',
-    channels,
-  );
+export async function cancel(ctx: RequestContext, orderId: string) {
+  const order = await cancelOrder(ctx.schema, orderId, ctx.userId);
+  await auditUserAction(ctx, { action: 'order.cancelled', targetType: 'order', targetId: orderId });
+  return order;
 }

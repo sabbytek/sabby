@@ -7,6 +7,12 @@ import { NotFoundError } from '../../shared/errors/types.js';
 import type { PaginatedResult } from '../../shared/types/index.js';
 import { postJournalEntry } from '../ledger/service.js';
 import { expenseRecordedTemplate } from '../ledger/templates.js';
+import { resolveFileUrl } from '../../shared/storage/private.js';
+
+// receiptUrl may hold a private-storage reference; callers get a signed link.
+async function withSignedReceipt(schemaName: string, expense: Expense): Promise<Expense> {
+  return { ...expense, receiptUrl: await resolveFileUrl(expense.receiptUrl, schemaName) };
+}
 
 export async function createExpense(
   schemaName: string,
@@ -40,12 +46,15 @@ export async function createExpense(
     schemaName,
     expenseRecordedTemplate(id, input.amountKobo, input.description),
     userId,
-  ).catch(() => {});
-
-  return withTenantSchema(schemaName, async (db) => {
-    const [expense] = await db.select().from(expenses).where(eq(expenses.id, id));
-    return expense!;
+  ).catch(() => {
+    /* non-fatal: secondary failure intentionally ignored */
   });
+
+  const expense = await withTenantSchema(schemaName, async (db) => {
+    const [row] = await db.select().from(expenses).where(eq(expenses.id, id));
+    return row!;
+  });
+  return withSignedReceipt(schemaName, expense);
 }
 
 export async function listExpenses(
@@ -63,7 +72,7 @@ export async function listExpenses(
   const limit = Math.min(query.limit ?? 20, 100);
   const offset = (page - 1) * limit;
 
-  return withTenantSchema(schemaName, async (db) => {
+  const result = await withTenantSchema(schemaName, async (db) => {
     const conditions = [];
     if (query.category) conditions.push(eq(expenses.category, query.category));
     if (query.locationId) conditions.push(eq(expenses.locationId, query.locationId));
@@ -88,16 +97,17 @@ export async function listExpenses(
     const total = parseInt(countRow?.count ?? '0');
     return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
   });
+  return {
+    ...result,
+    items: await Promise.all(result.items.map((row) => withSignedReceipt(schemaName, row))),
+  };
 }
 
 export async function getExpense(schemaName: string, expenseId: string) {
-  return withTenantSchema(schemaName, async (db) => {
-    const [expense] = await db
-      .select()
-      .from(expenses)
-      .where(eq(expenses.id, expenseId))
-      .limit(1);
-    if (!expense) throw new NotFoundError('Expense', expenseId);
-    return expense;
+  const expense = await withTenantSchema(schemaName, async (db) => {
+    const [row] = await db.select().from(expenses).where(eq(expenses.id, expenseId)).limit(1);
+    if (!row) throw new NotFoundError('Expense', expenseId);
+    return row;
   });
+  return withSignedReceipt(schemaName, expense);
 }

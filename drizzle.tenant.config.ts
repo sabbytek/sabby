@@ -1,9 +1,5 @@
 import type { Config } from 'drizzle-kit';
 
-declare const process: {
-  env: Record<string, string | undefined>;
-};
-
 // Generates migrations for the tenant schema template
 // Apply these to each tenant schema on provisioning and upgrades
 // Run: drizzle-kit generate --config drizzle.tenant.config.ts

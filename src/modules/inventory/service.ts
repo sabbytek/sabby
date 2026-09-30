@@ -60,10 +60,7 @@ export async function receiveStock(
       .select({ id: inventory.id })
       .from(inventory)
       .where(
-        and(
-          eq(inventory.variantId, input.variantId),
-          eq(inventory.locationId, input.locationId),
-        ),
+        and(eq(inventory.variantId, input.variantId), eq(inventory.locationId, input.locationId)),
       )
       .limit(1);
 
@@ -81,10 +78,7 @@ export async function receiveStock(
         updatedAt: new Date(),
       })
       .where(
-        and(
-          eq(inventory.variantId, input.variantId),
-          eq(inventory.locationId, input.locationId),
-        ),
+        and(eq(inventory.variantId, input.variantId), eq(inventory.locationId, input.locationId)),
       );
 
     const movementId = uuidv4();
@@ -102,10 +96,7 @@ export async function receiveStock(
       .select()
       .from(inventory)
       .where(
-        and(
-          eq(inventory.variantId, input.variantId),
-          eq(inventory.locationId, input.locationId),
-        ),
+        and(eq(inventory.variantId, input.variantId), eq(inventory.locationId, input.locationId)),
       );
     return updated!;
   });
@@ -126,10 +117,7 @@ export async function adjustStock(
       .select()
       .from(inventory)
       .where(
-        and(
-          eq(inventory.variantId, input.variantId),
-          eq(inventory.locationId, input.locationId),
-        ),
+        and(eq(inventory.variantId, input.variantId), eq(inventory.locationId, input.locationId)),
       )
       .limit(1);
 
@@ -154,10 +142,7 @@ export async function adjustStock(
         updatedAt: new Date(),
       })
       .where(
-        and(
-          eq(inventory.variantId, input.variantId),
-          eq(inventory.locationId, input.locationId),
-        ),
+        and(eq(inventory.variantId, input.variantId), eq(inventory.locationId, input.locationId)),
       );
 
     const movementId = uuidv4();
@@ -175,10 +160,7 @@ export async function adjustStock(
       .select()
       .from(inventory)
       .where(
-        and(
-          eq(inventory.variantId, input.variantId),
-          eq(inventory.locationId, input.locationId),
-        ),
+        and(eq(inventory.variantId, input.variantId), eq(inventory.locationId, input.locationId)),
       );
     return updated!;
   });
@@ -226,9 +208,7 @@ export async function listMovements(
 
 export async function getLowStock(schemaName: string, locationId?: string) {
   return withTenantSchema(schemaName, async (db) => {
-    const conditions = [
-      sql`${inventory.quantityOnHand} <= ${inventory.lowStockThreshold}`,
-    ];
+    const conditions = [sql`${inventory.quantityOnHand} <= ${inventory.lowStockThreshold}`];
     if (locationId) conditions.push(eq(inventory.locationId, locationId));
 
     return db
@@ -270,9 +250,7 @@ export async function checkAndEnqueueLowStockAlerts(
       })
       .from(inventory)
       .leftJoin(productVariants, eq(inventory.variantId, productVariants.id))
-      .where(
-        and(inArray(inventory.variantId, variantIds), eq(inventory.locationId, locationId)),
-      ),
+      .where(and(inArray(inventory.variantId, variantIds), eq(inventory.locationId, locationId))),
   );
 
   for (const level of updatedLevels) {
@@ -289,226 +267,4 @@ export async function checkAndEnqueueLowStockAlerts(
       });
     }
   }
-}
-
-/**
- * Check stock availability across all locations for a given SKU or variant.
- * Returns stock levels at each branch so staff can see where to source from.
- */
-export async function getAvailability(
-  schemaName: string,
-  query: { sku?: string; variantId?: string },
-) {
-  return withTenantSchema(schemaName, async (db) => {
-    const conditions = [];
-    if (query.variantId) {
-      conditions.push(eq(inventory.variantId, query.variantId));
-    }
-    if (query.sku) {
-      conditions.push(eq(productVariants.sku, query.sku));
-    }
-
-    const results = await db
-      .select({
-        variantId: inventory.variantId,
-        variantName: productVariants.name,
-        sku: productVariants.sku,
-        locationId: inventory.locationId,
-        locationName: locations.name,
-        quantityOnHand: inventory.quantityOnHand,
-        lowStockThreshold: inventory.lowStockThreshold,
-      })
-      .from(inventory)
-      .innerJoin(productVariants, eq(inventory.variantId, productVariants.id))
-      .innerJoin(locations, eq(inventory.locationId, locations.id))
-      .where(conditions.length > 0 ? and(...conditions) : undefined);
-
-    const totalStock = results.reduce((sum, r) => sum + r.quantityOnHand, 0);
-    const locationsWithStock = results.filter((r) => r.quantityOnHand > 0);
-
-    return {
-      sku: results[0]?.sku ?? query.sku,
-      variantId: results[0]?.variantId ?? query.variantId,
-      variantName: results[0]?.variantName ?? null,
-      totalStock,
-      availableAt: locationsWithStock.length,
-      locations: results.map((r) => ({
-        locationId: r.locationId,
-        locationName: r.locationName,
-        quantityOnHand: r.quantityOnHand,
-        lowStockThreshold: r.lowStockThreshold,
-        isLowStock: r.quantityOnHand <= r.lowStockThreshold,
-      })),
-    };
-  });
-}
-
-/**
- * Transfer stock between two locations within the same tenant.
- * Creates paired stock movements for audit trail.
- */
-export async function transferStock(
-  schemaName: string,
-  userId: string,
-  input: {
-    variantId: string;
-    fromLocationId: string;
-    toLocationId: string;
-    quantity: number;
-    note?: string;
-  },
-) {
-  if (input.quantity <= 0) {
-    throw new ValidationError('Transfer quantity must be greater than zero');
-  }
-
-  if (input.fromLocationId === input.toLocationId) {
-    throw new ValidationError('Cannot transfer to the same location');
-  }
-
-  return withTenantSchema(schemaName, async (db) => {
-    // Check source inventory
-    const [sourceInv] = await db
-      .select()
-      .from(inventory)
-      .where(
-        and(
-          eq(inventory.variantId, input.variantId),
-          eq(inventory.locationId, input.fromLocationId),
-        ),
-      )
-      .limit(1);
-
-    if (!sourceInv) {
-      throw new NotFoundError(
-        'Inventory record',
-        `variant ${input.variantId} at source location ${input.fromLocationId}`,
-      );
-    }
-
-    if (sourceInv.quantityOnHand < input.quantity) {
-      throw new ValidationError(
-        `Insufficient stock at source location (available: ${sourceInv.quantityOnHand}, requested: ${input.quantity})`,
-      );
-    }
-
-    // Check/create destination inventory
-    const [destInv] = await db
-      .select()
-      .from(inventory)
-      .where(
-        and(
-          eq(inventory.variantId, input.variantId),
-          eq(inventory.locationId, input.toLocationId),
-        ),
-      )
-      .limit(1);
-
-    if (!destInv) {
-      // Create inventory record at destination if it doesn't exist
-      await db.insert(inventory).values({
-        id: uuidv4(),
-        variantId: input.variantId,
-        locationId: input.toLocationId,
-        quantityOnHand: 0,
-        lowStockThreshold: sourceInv.lowStockThreshold,
-      });
-    }
-
-    const transferId = uuidv4();
-    const transferNote = input.note ?? `Transfer ${transferId}`;
-
-    // Deduct from source
-    await db
-      .update(inventory)
-      .set({
-        quantityOnHand: sql`${inventory.quantityOnHand} - ${input.quantity}`,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(inventory.variantId, input.variantId),
-          eq(inventory.locationId, input.fromLocationId),
-        ),
-      );
-
-    // Add to destination
-    await db
-      .update(inventory)
-      .set({
-        quantityOnHand: sql`${inventory.quantityOnHand} + ${input.quantity}`,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(inventory.variantId, input.variantId),
-          eq(inventory.locationId, input.toLocationId),
-        ),
-      );
-
-    // Record outbound movement
-    await db.insert(stockMovements).values({
-      id: uuidv4(),
-      variantId: input.variantId,
-      locationId: input.fromLocationId,
-      type: 'transfer',
-      quantity: -input.quantity,
-      referenceId: transferId,
-      referenceType: 'transfer',
-      note: `OUT: ${transferNote}`,
-      createdBy: userId,
-    });
-
-    // Record inbound movement
-    await db.insert(stockMovements).values({
-      id: uuidv4(),
-      variantId: input.variantId,
-      locationId: input.toLocationId,
-      type: 'transfer',
-      quantity: input.quantity,
-      referenceId: transferId,
-      referenceType: 'transfer',
-      note: `IN: ${transferNote}`,
-      createdBy: userId,
-    });
-
-    // Fetch updated inventory at both locations
-    const [updatedSource] = await db
-      .select({
-        locationId: inventory.locationId,
-        locationName: locations.name,
-        quantityOnHand: inventory.quantityOnHand,
-      })
-      .from(inventory)
-      .innerJoin(locations, eq(inventory.locationId, locations.id))
-      .where(
-        and(
-          eq(inventory.variantId, input.variantId),
-          eq(inventory.locationId, input.fromLocationId),
-        ),
-      );
-
-    const [updatedDest] = await db
-      .select({
-        locationId: inventory.locationId,
-        locationName: locations.name,
-        quantityOnHand: inventory.quantityOnHand,
-      })
-      .from(inventory)
-      .innerJoin(locations, eq(inventory.locationId, locations.id))
-      .where(
-        and(
-          eq(inventory.variantId, input.variantId),
-          eq(inventory.locationId, input.toLocationId),
-        ),
-      );
-
-    return {
-      transferId,
-      variantId: input.variantId,
-      quantity: input.quantity,
-      from: updatedSource,
-      to: updatedDest,
-    };
-  });
 }

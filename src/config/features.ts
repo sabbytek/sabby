@@ -142,7 +142,7 @@ export const PLAN_ENTITLEMENTS: Record<PlanTier, PlanEntitlements> = {
 };
 
 export const PLAN_PRICING_NGN: Record<Exclude<PlanTier, 'trial'>, number> = {
-  entry: 350000,    // ₦3,500 in kobo
-  growth: 1000000,  // ₦10,000 in kobo
-  enterprise: 0,    // custom pricing
+  entry: 350000, // ₦3,500 in kobo
+  growth: 1000000, // ₦10,000 in kobo
+  enterprise: 0, // custom pricing
 };

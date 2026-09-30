@@ -1,0 +1,104 @@
+{
+  "_module": "Payments + gateway webhooks  (/v1/payments)",
+  "_notes": [
+    "POST /v1/payments/initiate needs a tenant token and the orders:create entitlement. It calls Paystack live — use a Paystack TEST secret key in QA.",
+    "Webhooks are unauthenticated but signature-verified. An invalid signature returns HTTP 200 with {received:true} and does NOTHING — 200 is not proof of processing, always verify the side effect in the DB / GET /v1/orders/{id}.",
+    "Routing is by data.metadata.schemaName. Without it the handler no-ops. schemaName is 't_' + tenantId with dashes replaced by underscores.",
+    "Paystack signature: HMAC-SHA512 of the RAW body with PAYSTACK_SECRET_KEY, sent as x-paystack-signature.",
+    "Flutterwave signature: the verif-hash header compared against FLUTTERWAVE_WEBHOOK_SECRET.",
+    "Replay of the same reference must be idempotent — the second delivery is skipped as a duplicate."
+  ],
+
+  "initiate_payment": {
+    "orderId": "<ORDER_ID>",
+    "email": "chidinma.qa@example.ng"
+  },
+  "initiate_payment_unknown_order": {
+    "orderId": "00000000-0000-0000-0000-000000000000",
+    "email": "chidinma.qa@example.ng"
+  },
+  "initiate_payment_bad_email": {
+    "orderId": "<ORDER_ID>",
+    "email": "nope"
+  },
+
+  "paystack_charge_success": {
+    "event": "charge.success",
+    "data": {
+      "id": 302961,
+      "reference": "<REFERENCE_FROM_INITIATE>",
+      "amount": 125000000,
+      "fees": 1875000,
+      "status": "success",
+      "customer": { "email": "chidinma.qa@example.ng" },
+      "metadata": {
+        "orderId": "<ORDER_ID>",
+        "schemaName": "t_<TENANT_ID_WITH_UNDERSCORES>"
+      }
+    }
+  },
+  "paystack_charge_failed": {
+    "event": "charge.failed",
+    "data": {
+      "id": 302962,
+      "reference": "<REFERENCE_FROM_INITIATE>",
+      "amount": 125000000,
+      "status": "failed",
+      "customer": { "email": "chidinma.qa@example.ng" },
+      "metadata": {
+        "orderId": "<ORDER_ID>",
+        "schemaName": "t_<TENANT_ID_WITH_UNDERSCORES>"
+      }
+    }
+  },
+  "paystack_missing_schema_name": {
+    "event": "charge.success",
+    "data": {
+      "id": 302963,
+      "reference": "qa-no-schema",
+      "amount": 100000,
+      "status": "success",
+      "metadata": { "orderId": "<ORDER_ID>" }
+    }
+  },
+  "paystack_subscription_success": {
+    "event": "charge.success",
+    "data": {
+      "id": 302964,
+      "reference": "bpos-sub-<UUID>",
+      "amount": 350000,
+      "status": "success",
+      "customer": { "email": "<GROWTH_OWNER_EMAIL>" },
+      "authorization": { "authorization_code": "AUTH_qa123456" },
+      "metadata": {
+        "type": "subscription",
+        "tenantId": "<TENANT_ID>",
+        "schemaName": "t_<TENANT_ID_WITH_UNDERSCORES>",
+        "planTier": "entry"
+      }
+    }
+  },
+
+  "flutterwave_charge_completed": {
+    "event": "charge.completed",
+    "data": {
+      "id": 4567890,
+      "tx_ref": "<REFERENCE_FROM_INITIATE>",
+      "status": "successful",
+      "amount": 1250000.00,
+      "app_fee": 18750.00,
+      "flw_ref": "FLW-QA-REF-0001",
+      "created_at": "2026-09-22T09:15:00.000Z",
+      "metadata": {
+        "orderId": "<ORDER_ID>",
+        "schemaName": "t_<TENANT_ID_WITH_UNDERSCORES>"
+      }
+    }
+  },
+
+  "_signing_commands": {
+    "paystack": "BODY=$(cat paystack_charge_success.json); SIG=$(printf '%s' \"$BODY\" | openssl dgst -sha512 -hmac \"$PAYSTACK_SECRET_KEY\" | awk '{print $2}'); curl -sS -X POST $BASE/v1/payments/webhook/paystack -H 'content-type: application/json' -H \"x-paystack-signature: $SIG\" --data-raw \"$BODY\"",
+    "flutterwave": "curl -sS -X POST $BASE/v1/payments/webhook/flutterwave -H 'content-type: application/json' -H \"verif-hash: $FLUTTERWAVE_WEBHOOK_SECRET\" --data-raw \"$(cat flutterwave_charge_completed.json)\"",
+    "tamper_check": "Re-send either request with one digit of the signature changed — expect 200 {received:true} and NO change to the order or payment row."
+  }
+}

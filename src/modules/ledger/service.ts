@@ -1,11 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { eq, sql, desc, and } from 'drizzle-orm';
 import { withTenantSchema } from '../../shared/db/tenant.js';
-import {
-  ledgerAccounts,
-  journalEntries,
-  journalLines,
-} from '../../shared/db/schema/tenant.js';
+import { ledgerAccounts, journalEntries, journalLines } from '../../shared/db/schema/tenant.js';
 import type { JournalEntryDraft } from './templates.js';
 
 // ─── Post journal entry ───────────────────────────────────────────────────────
@@ -21,7 +17,12 @@ export async function postJournalEntry(
     const accounts = await db
       .select({ id: ledgerAccounts.id, code: ledgerAccounts.code })
       .from(ledgerAccounts)
-      .where(sql`${ledgerAccounts.code} = ANY(ARRAY[${sql.join(codes.map((c) => sql`${c}`), sql`, `)}])`);
+      .where(
+        sql`${ledgerAccounts.code} = ANY(ARRAY[${sql.join(
+          codes.map((c) => sql`${c}`),
+          sql`, `,
+        )}])`,
+      );
 
     const codeToId = new Map(accounts.map((a) => [a.code, a.id]));
 

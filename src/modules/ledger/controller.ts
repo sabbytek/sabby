@@ -6,17 +6,15 @@ import {
   getWalletBalance,
 } from './service.js';
 
-export async function listAccounts(ctx: RequestContext): Promise<unknown> {
-  const result = await listLedgerAccounts(ctx.schema);
-  return result;
+export async function listAccounts(ctx: RequestContext) {
+  return listLedgerAccounts(ctx.schema);
 }
 
-export async function listBalances(ctx: RequestContext): Promise<unknown> {
-  const result = await getAccountBalances(ctx.schema);
-  return result;
+export async function listBalances(ctx: RequestContext) {
+  return getAccountBalances(ctx.schema);
 }
 
-export async function walletBalance(ctx: RequestContext): Promise<unknown> {
+export async function walletBalance(ctx: RequestContext) {
   const balanceKobo = await getWalletBalance(ctx.schema);
   return { balanceKobo, balanceNaira: (balanceKobo / 100).toFixed(2) };
 }
@@ -29,12 +27,11 @@ export async function listEntries(
     referenceType?: string;
     referenceId?: string;
   },
-): Promise<unknown> {
-  const result = await listJournalEntries(ctx.schema, {
+) {
+  return listJournalEntries(ctx.schema, {
     ...(query.page && { page: parseInt(query.page) }),
     ...(query.limit && { limit: parseInt(query.limit) }),
     ...(query.referenceType && { referenceType: query.referenceType }),
     ...(query.referenceId && { referenceId: query.referenceId }),
   });
-  return result;
 }

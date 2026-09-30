@@ -33,7 +33,7 @@ export interface DispatchInput {
   weightKg: number;
 }
 
-export async function configure(ctx: RequestContext, input: ConfigureInput): Promise<unknown> {
+export async function configure(ctx: RequestContext, input: ConfigureInput) {
   await configureLogistics(ctx.tenantId, input.provider, input.apiKey, {
     webhookSecret: input.webhookSecret,
     ...(input.baseUrl ? { baseUrl: input.baseUrl } : {}),
@@ -42,18 +42,16 @@ export async function configure(ctx: RequestContext, input: ConfigureInput): Pro
   return { provider: input.provider, webhookUrl };
 }
 
-export async function getConfig(ctx: RequestContext): Promise<unknown> {
-  const result = await getDispatchConfig(ctx.tenantId);
-  return result;
+export async function getConfig(ctx: RequestContext) {
+  return getDispatchConfig(ctx.tenantId);
 }
 
-export async function quote(ctx: RequestContext, input: QuoteInput): Promise<unknown> {
-  const result = await getQuote(ctx.tenantId, input.pickupAddress, input.deliveryAddress, input.weightKg);
-  return result;
+export async function quote(ctx: RequestContext, input: QuoteInput) {
+  return getQuote(ctx.tenantId, input.pickupAddress, input.deliveryAddress, input.weightKg);
 }
 
-export async function dispatch(ctx: RequestContext, orderId: string, input: DispatchInput): Promise<unknown> {
-  const result = await dispatchOrder(
+export async function dispatch(ctx: RequestContext, orderId: string, input: DispatchInput) {
+  return dispatchOrder(
     ctx.tenantId,
     ctx.schema,
     orderId,
@@ -62,12 +60,10 @@ export async function dispatch(ctx: RequestContext, orderId: string, input: Disp
     input.recipientPhone,
     input.weightKg,
   );
-  return result;
 }
 
-export async function track(ctx: RequestContext, orderId: string): Promise<unknown> {
-  const result = await trackShipment(ctx.tenantId, ctx.schema, orderId);
-  return result;
+export async function track(ctx: RequestContext, orderId: string) {
+  return trackShipment(ctx.tenantId, ctx.schema, orderId);
 }
 
 export async function handleWebhook(
@@ -76,9 +72,8 @@ export async function handleWebhook(
   provider: string,
   tenantId: string,
   payload: LogisticsWebhookPayload,
-): Promise<unknown> {
-  if (!payload.metadata) payload.metadata = {};
-  if (!payload.metadata.tenantId) payload.metadata.tenantId = tenantId;
-  const result = await handleLogisticsWebhook(rawBody, signature, provider, payload);
-  return result;
+) {
+  payload.metadata ??= {};
+  payload.metadata.tenantId ??= tenantId;
+  return handleLogisticsWebhook(rawBody, signature, provider, payload);
 }

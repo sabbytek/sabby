@@ -26,6 +26,19 @@ jobs:
     runs-on: ubuntu-latest
     needs: check
     services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: bpos_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d bpos_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
       redis:
         image: redis:7.2-alpine
         ports:
@@ -37,10 +50,13 @@ jobs:
           --health-retries 5
     env:
       NODE_ENV: test
-      DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+      # Must match the DATABASE_URL that vitest.config.ts sets for tests: the
+      # health check and any unmocked query resolve against this Postgres
+      # service. The app's DB client speaks the wire protocol to it via the
+      # postgres-js driver (Neon HTTP is used only for real Neon hosts).
+      DATABASE_URL: postgresql://test:test@localhost:5432/bpos_test
       JWT_ACCESS_SECRET: test-access-secret-at-least-32-chars-long
       JWT_REFRESH_SECRET: test-refresh-secret-at-least-32-chars-long
-      JWT_PLATFORM_SECRET: test-platform-secret-at-least-32-chars-long
       REDIS_URL: redis://localhost:6379
       R2_ACCOUNT_ID: test
       R2_ACCESS_KEY_ID: test

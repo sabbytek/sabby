@@ -1,0 +1,145 @@
+{
+  "_module": "WhatsApp commerce  (/v1/whatsapp)",
+  "_notes": [
+    "Gated on whatsapp:ordering (growth+) for the conversational flow; POST /v1/whatsapp/setup itself only needs a tenant token.",
+    "GET /webhook is Meta's challenge-response: it echoes hub.challenge verbatim as plain text when hub.verify_token matches WHATSAPP_VERIFY_TOKEN, otherwise 403.",
+    "POST /webhook verifies x-hub-signature-256 = 'sha256=' + HMAC-SHA256(rawBody, WHATSAPP_APP_SECRET). A bad signature returns 200 {success:true} and processes NOTHING — verify the side effect, not the status code.",
+    "Inbound messages are routed to a tenant by phone_number_id, which must first be registered via /setup. An unregistered id is silently ignored.",
+    "Session state lives in Redis. 'cart' shows the cart from anywhere; 'hi', 'hello', 'menu', 'start' and '0' reset to the greeting."
+  ],
+
+  "setup": { "phoneNumberId": "109876543210987" },
+  "setup_empty": { "phoneNumberId": "" },
+
+  "_webhook_verify": {
+    "ok": "GET /v1/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=$WHATSAPP_VERIFY_TOKEN&hub.challenge=qa-challenge-123  -> 200, body is exactly: qa-challenge-123",
+    "bad_token": "GET /v1/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=qa-challenge-123  -> 403",
+    "missing_param": "GET /v1/whatsapp/webhook?hub.mode=subscribe  -> 400 VALIDATION_ERROR"
+  },
+
+  "inbound_text_greeting": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "QA_WABA_ID",
+        "changes": [
+          {
+            "field": "messages",
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": { "display_phone_number": "2348030000001", "phone_number_id": "109876543210987" },
+              "contacts": [{ "profile": { "name": "Chidinma Eze" }, "wa_id": "2348031234567" }],
+              "messages": [
+                {
+                  "from": "2348031234567",
+                  "id": "wamid.QA0001",
+                  "timestamp": "1758528000",
+                  "type": "text",
+                  "text": { "body": "hi" }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+
+  "inbound_interactive_list_reply": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "QA_WABA_ID",
+        "changes": [
+          {
+            "field": "messages",
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": { "display_phone_number": "2348030000001", "phone_number_id": "109876543210987" },
+              "messages": [
+                {
+                  "from": "2348031234567",
+                  "id": "wamid.QA0002",
+                  "timestamp": "1758528060",
+                  "type": "interactive",
+                  "interactive": {
+                    "type": "list_reply",
+                    "list_reply": { "id": "<CATEGORY_OR_VARIANT_ID>", "title": "QA Smartphones" }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+
+  "inbound_text_cart": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "QA_WABA_ID",
+        "changes": [
+          {
+            "field": "messages",
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": { "display_phone_number": "2348030000001", "phone_number_id": "109876543210987" },
+              "messages": [
+                { "from": "2348031234567", "id": "wamid.QA0003", "timestamp": "1758528120", "type": "text", "text": { "body": "cart" } }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+
+  "inbound_unregistered_phone_number_id": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "QA_WABA_ID",
+        "changes": [
+          {
+            "field": "messages",
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": { "display_phone_number": "2348039999999", "phone_number_id": "000000000000000" },
+              "messages": [
+                { "from": "2348031234567", "id": "wamid.QA0004", "timestamp": "1758528180", "type": "text", "text": { "body": "hi" } }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+
+  "inbound_wrong_object": {
+    "object": "instagram",
+    "entry": []
+  },
+
+  "inbound_status_update_no_messages": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "QA_WABA_ID",
+        "changes": [
+          {
+            "field": "messages",
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": { "display_phone_number": "2348030000001", "phone_number_id": "109876543210987" },
+              "statuses": [{ "id": "wamid.QA0001", "status": "delivered", "timestamp": "1758528200", "recipient_id": "2348031234567" }]
+            }
+          }
+        ]
+      }
+    ]
+  },
+
+  "_signing_command": "BODY=$(cat inbound_text_greeting.json); SIG=sha256=$(printf '%s' \"$BODY\" | openssl dgst -sha256 -hmac \"$WHATSAPP_APP_SECRET\" | awk '{print $2}'); curl -sS -X POST $BASE/v1/whatsapp/webhook -H 'content-type: application/json' -H \"x-hub-signature-256: $SIG\" --data-raw \"$BODY\""
+}

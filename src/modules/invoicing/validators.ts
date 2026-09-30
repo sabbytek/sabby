@@ -1,8 +1,10 @@
 import { z } from 'zod';
 
-export const createInvoiceBodySchema = z.object({
-  orderId: z.string(),
-}).strict();
+export const createInvoiceBodySchema = z
+  .object({
+    orderId: z.string(),
+  })
+  .strict();
 
 export const listInvoicesQuerySchema = z.object({
   orderId: z.string().optional(),

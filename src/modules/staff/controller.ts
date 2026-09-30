@@ -1,5 +1,6 @@
 import type { RequestContext } from '../../shared/types/controller.js';
 import type { UserRole } from '../../shared/types/index.js';
+import { auditUserAction } from '../../shared/audit/tenant-audit.js';
 import {
   listStaff,
   getStaffMember,
@@ -8,14 +9,12 @@ import {
   deactivateStaffMember,
 } from './service.js';
 
-export async function list(ctx: RequestContext): Promise<unknown> {
-  const result = await listStaff(ctx.schema);
-  return result;
+export async function list(ctx: RequestContext) {
+  return listStaff(ctx.schema);
 }
 
-export async function get(ctx: RequestContext, id: string): Promise<unknown> {
-  const result = await getStaffMember(ctx.schema, id);
-  return result;
+export async function get(ctx: RequestContext, id: string) {
+  return getStaffMember(ctx.schema, id);
 }
 
 export async function invite(
@@ -29,9 +28,15 @@ export async function invite(
     locationId?: string;
     temporaryPassword: string;
   },
-): Promise<unknown> {
-  const result = await inviteStaff(ctx.schema, input);
-  return result;
+) {
+  const member = await inviteStaff(ctx.schema, input);
+  await auditUserAction(ctx, {
+    action: 'staff.invited',
+    targetType: 'staff',
+    targetId: member.id,
+    metadata: { email: input.email, role: input.role },
+  });
+  return member;
 }
 
 export async function update(
@@ -45,12 +50,20 @@ export async function update(
     locationId: string | null;
     isActive: boolean;
   }>,
-): Promise<unknown> {
-  const result = await updateStaffMember(ctx.schema, id, input);
-  return result;
+) {
+  const member = await updateStaffMember(ctx.schema, id, input);
+  await auditUserAction(ctx, {
+    action: 'staff.updated',
+    targetType: 'staff',
+    targetId: id,
+    // Role changes are the security-sensitive case; surface the new value.
+    metadata: { fields: Object.keys(input), ...(input.role !== undefined && { role: input.role }) },
+  });
+  return member;
 }
 
-export async function deactivate(ctx: RequestContext, id: string): Promise<unknown> {
+export async function deactivate(ctx: RequestContext, id: string) {
   const result = await deactivateStaffMember(ctx.schema, id, ctx.userId);
+  await auditUserAction(ctx, { action: 'staff.deactivated', targetType: 'staff', targetId: id });
   return result;
 }

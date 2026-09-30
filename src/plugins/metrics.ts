@@ -61,9 +61,7 @@ async function metricsPlugin(app: FastifyInstance) {
       }
     }
     const metrics = await registry.metrics();
-    return reply
-      .header('Content-Type', registry.contentType)
-      .send(metrics);
+    return reply.header('Content-Type', registry.contentType).send(metrics);
   });
 }
 

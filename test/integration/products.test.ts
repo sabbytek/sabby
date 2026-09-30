@@ -40,7 +40,6 @@ vi.mock('../../src/modules/products/service.js', () => ({
         id: 'var-1',
         productId: 'prod-1',
         sku: 'SKU-001',
-        barcode: '1234567890123',
         name: 'Default',
         priceKobo: 50000,
         costKobo: 25000,
@@ -63,34 +62,8 @@ vi.mock('../../src/modules/products/service.js', () => ({
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   }),
-  createVariant: vi.fn().mockResolvedValue({ id: 'var-1', sku: 'SKU-001', barcode: '1234567890123', name: 'Default' }),
-  updateVariant: vi.fn().mockResolvedValue({ id: 'var-1', sku: 'SKU-001', barcode: '1234567890123', name: 'Updated' }),
-  getVariantByBarcode: vi.fn().mockResolvedValue({
-    id: 'var-1',
-    productId: 'prod-1',
-    sku: 'SKU-001',
-    barcode: '1234567890123',
-    name: 'Default',
-    priceKobo: 50000,
-    costKobo: 25000,
-    taxRateBps: 750,
-    attributes: null,
-    weightKg: null,
-    isActive: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    product: {
-      id: 'prod-1',
-      name: 'Test Product',
-      description: null,
-      categoryId: null,
-      imageUrl: null,
-      isActive: true,
-      hasVariants: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-  }),
+  createVariant: vi.fn().mockResolvedValue({ id: 'var-1', sku: 'SKU-001', name: 'Default' }),
+  updateVariant: vi.fn().mockResolvedValue({ id: 'var-1', sku: 'SKU-001', name: 'Updated' }),
 }));
 
 vi.mock('../../src/shared/middleware/tenant.js', () => ({
@@ -233,7 +206,7 @@ describe('Products API', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    const body = response.json<{ data: { variants: Array<Record<string, unknown>> } }>();
+    const body = response.json<{ data: { variants: Record<string, unknown>[] } }>();
     const variant = body.data.variants[0]!;
     expect(variant).toHaveProperty('costKobo');
     expect(variant['costKobo']).toBe(25000);
@@ -247,7 +220,7 @@ describe('Products API', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    const body = response.json<{ data: { variants: Array<Record<string, unknown>> } }>();
+    const body = response.json<{ data: { variants: Record<string, unknown>[] } }>();
     const variant = body.data.variants[0]!;
     expect(variant).not.toHaveProperty('costKobo');
     // Staff can still see sales price and tax rate

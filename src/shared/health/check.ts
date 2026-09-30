@@ -55,8 +55,10 @@ async function checkDatabase(): Promise<ComponentCheck> {
 
 async function checkRedis(): Promise<ComponentCheck> {
   const start = Date.now();
+  // If the connection attempt already failed (DNS error, deleted instance, etc.)
+  // report the error immediately without issuing a command that would hang.
   if (!isRedisAvailable()) {
-    return { status: 'error', message: 'Redis unavailable — check REDIS_URL env var' };
+    return { status: 'error', message: 'Redis unavailable — check REDIS_URL secret on Fly.io' };
   }
   try {
     const pong = await withTimeout('redis', cache.ping());

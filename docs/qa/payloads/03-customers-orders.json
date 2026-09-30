@@ -1,0 +1,80 @@
+{
+  "_module": "Customers + Orders  (/v1/customers, /v1/orders)",
+  "_notes": [
+    "Customers are gated on customers:manage; on trial the plan limit is 50 records.",
+    "Orders are gated on orders:create; on trial the plan limit is 20 orders.",
+    "confirm and cancel require owner/manager. create, list, get, process and fulfil allow staff.",
+    "Order state machine: draft -> confirmed -> processing -> fulfilled|dispatched -> refunded. cancelled is reachable from draft, confirmed, processing and dispatched; cancelled and refunded are terminal.",
+    "Confirming deducts stock; cancelling a previously confirmed order restores it."
+  ],
+
+  "customer_create": {
+    "firstName": "Chidinma",
+    "lastName": "Eze",
+    "email": "chidinma.qa@example.ng",
+    "phone": "+2348031234567",
+    "address": "22 Admiralty Way, Lekki Phase 1, Lagos",
+    "note": "QA fixture customer",
+    "consentGivenAt": "2026-09-01T10:00:00.000Z",
+    "consentSource": "pos_signup"
+  },
+  "customer_create_minimal": { "firstName": "Walk-in" },
+  "customer_create_bad_email": { "firstName": "Bad", "email": "not-an-email" },
+  "customer_create_bad_consent_source": { "firstName": "Bad", "consentSource": "telepathy" },
+  "customer_update": {
+    "phone": "+2348039999999",
+    "note": "QA — updated contact",
+    "email": null
+  },
+
+  "order_create_single_line": {
+    "customerId": "<CUSTOMER_ID>",
+    "locationId": "<LOCATION_ID>",
+    "channel": "pos",
+    "items": [
+      { "variantId": "<VARIANT_ID>", "quantity": 1, "unitPriceKobo": 125000000 }
+    ],
+    "note": "QA single-line order"
+  },
+  "order_create_multi_line_with_discount": {
+    "customerId": "<CUSTOMER_ID>",
+    "locationId": "<LOCATION_ID>",
+    "assignedTo": "<STAFF_USER_ID>",
+    "channel": "whatsapp",
+    "items": [
+      { "variantId": "<VARIANT_ID_A>", "quantity": 2, "unitPriceKobo": 25000000, "discountKobo": 500000, "taxKobo": 375000 },
+      { "variantId": "<VARIANT_ID_B>", "quantity": 1, "unitPriceKobo": 3500000 }
+    ],
+    "discountKobo": 1000000,
+    "taxKobo": 262500,
+    "note": "QA multi-line: verify subtotal, per-line and order-level discount, tax and total"
+  },
+  "order_create_no_items": { "channel": "manual", "items": [] },
+  "order_create_zero_quantity": {
+    "channel": "manual",
+    "items": [{ "variantId": "<VARIANT_ID>", "quantity": 0, "unitPriceKobo": 1000 }]
+  },
+  "order_create_unknown_variant": {
+    "channel": "manual",
+    "items": [{ "variantId": "00000000-0000-0000-0000-000000000000", "quantity": 1, "unitPriceKobo": 1000 }]
+  },
+  "order_create_bad_channel": {
+    "channel": "carrier-pigeon",
+    "items": [{ "variantId": "<VARIANT_ID>", "quantity": 1, "unitPriceKobo": 1000 }]
+  },
+  "order_create_oversell": {
+    "channel": "manual",
+    "items": [{ "variantId": "<VARIANT_ID>", "quantity": 99999, "unitPriceKobo": 125000000 }]
+  },
+
+  "_state_transitions": {
+    "confirm": "POST /v1/orders/{id}/confirm   (no body, owner/manager)",
+    "process": "POST /v1/orders/{id}/process   (no body)",
+    "fulfil":  "POST /v1/orders/{id}/fulfil    (no body)",
+    "cancel":  "POST /v1/orders/{id}/cancel    (no body, owner/manager)"
+  },
+  "_query_examples": {
+    "orders_list": "?page=1&limit=20&status=confirmed&channel=pos&from=2026-09-01T00:00:00.000Z&to=2026-09-30T23:59:59.000Z",
+    "customers_search": "?page=1&limit=20&search=chidinma"
+  }
+}

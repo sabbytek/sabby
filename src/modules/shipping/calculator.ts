@@ -5,7 +5,7 @@
  * shipping method whose conditions aren't met, or a zone rate with no matching zone).
  */
 
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { withTenantSchema } from '../../shared/db/tenant.js';
 import {
   shippingMethods,
@@ -16,11 +16,11 @@ import {
 
 export interface ShippingContext {
   orderValueKobo: number;
-  destinationState?: string;   // required for zone_rate methods
-  totalWeightKg?: number;      // required for weight_rate methods
-  itemProductIds?: string[];   // for product-based free shipping
-  itemCategoryIds?: string[];  // for category-based free shipping
-  promoCode?: string;          // for promo-code free shipping
+  destinationState?: string; // required for zone_rate methods
+  totalWeightKg?: number; // required for weight_rate methods
+  itemProductIds?: string[]; // for product-based free shipping
+  itemCategoryIds?: string[]; // for category-based free shipping
+  promoCode?: string; // for promo-code free shipping
 }
 
 export interface ShippingOption {
@@ -71,23 +71,26 @@ export async function resolveMethodFee(
             c.conditionType === 'min_order_value' &&
             c.thresholdKobo !== null &&
             ctx.orderValueKobo >= c.thresholdKobo
-          ) return 0;
+          )
+            return 0;
           if (
             c.conditionType === 'product' &&
             c.productId &&
             ctx.itemProductIds?.includes(c.productId)
-          ) return 0;
+          )
+            return 0;
           if (
             c.conditionType === 'category' &&
             c.categoryId &&
             ctx.itemCategoryIds?.includes(c.categoryId)
-          ) return 0;
+          )
+            return 0;
           if (
             c.conditionType === 'promo_code' &&
             c.promoCode &&
-            ctx.promoCode &&
-            c.promoCode.toLowerCase() === ctx.promoCode.toLowerCase()
-          ) return 0;
+            c.promoCode.toLowerCase() === ctx.promoCode?.toLowerCase()
+          )
+            return 0;
         }
         return null; // no condition met — method unavailable
       }
@@ -123,7 +126,8 @@ export async function resolveMethodFee(
           .where(eq(shippingRates.methodId, methodId));
 
         const matched = rates.find((r) => {
-          const aboveMin = r.minOrderValueKobo === null || ctx.orderValueKobo >= r.minOrderValueKobo;
+          const aboveMin =
+            r.minOrderValueKobo === null || ctx.orderValueKobo >= r.minOrderValueKobo;
           const belowMax = r.maxOrderValueKobo === null || ctx.orderValueKobo < r.maxOrderValueKobo;
           return aboveMin && belowMax;
         });

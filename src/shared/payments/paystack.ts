@@ -1,17 +1,22 @@
 import crypto from 'crypto';
 import { env } from '../../config/env.js';
-import type { PaymentGateway, InitiatePaymentInput, InitiatePaymentResult, VerifyPaymentResult } from './gateway.js';
+import type {
+  PaymentGateway,
+  InitiatePaymentInput,
+  InitiatePaymentResult,
+  VerifyPaymentResult,
+} from './gateway.js';
 
 const PAYSTACK_BASE = 'https://api.paystack.co';
 
 async function paystackRequest<T>(path: string, options?: RequestInit): Promise<T> {
-  const headers = new Headers(options?.headers);
-  headers.set('Authorization', `Bearer ${env.PAYSTACK_SECRET_KEY}`);
-  headers.set('Content-Type', 'application/json');
-
   const response = await fetch(`${PAYSTACK_BASE}${path}`, {
     ...options,
-    headers,
+    headers: {
+      Authorization: `Bearer ${env.PAYSTACK_SECRET_KEY}`,
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
   });
 
   const json = (await response.json()) as { status: boolean; message: string; data: T };
@@ -29,7 +34,7 @@ interface PaystackInitData {
 interface PaystackVerifyData {
   status: string;
   amount: number; // kobo
-  fees: number;   // kobo
+  fees: number; // kobo
   currency: string;
   reference: string;
   paid_at: string | null;
@@ -55,9 +60,7 @@ export const paystackGateway: PaymentGateway = {
   async verifyPayment(reference: string): Promise<VerifyPaymentResult> {
     const data = await paystackRequest<PaystackVerifyData>(`/transaction/verify/${reference}`);
     const status =
-      data.status === 'success' ? 'success'
-      : data.status === 'abandoned' ? 'abandoned'
-      : 'failed';
+      data.status === 'success' ? 'success' : data.status === 'abandoned' ? 'abandoned' : 'failed';
     return {
       status,
       amountKobo: data.amount,
@@ -74,7 +77,10 @@ export const paystackGateway: PaymentGateway = {
       .update(rawBody)
       .digest('hex');
     try {
-      return crypto.timingSafeEqual(Buffer.from(expected, 'utf-8'), Buffer.from(signature, 'utf-8'));
+      return crypto.timingSafeEqual(
+        Buffer.from(expected, 'utf-8'),
+        Buffer.from(signature, 'utf-8'),
+      );
     } catch {
       return false;
     }

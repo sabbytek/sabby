@@ -1,0 +1,103 @@
+{
+  "_module": "Products + Categories + Inventory + Locations  (/v1/products, /v1/inventory, /v1/locations)",
+  "_notes": [
+    "All money is INTEGER KOBO. ₦1,450,000.00 => 145000000. A decimal fails validation.",
+    "taxRateBps is basis points: 750 = 7.5%, max 10000.",
+    "Product writes need owner/manager. Reads allow any authenticated role.",
+    "Inventory is gated on inventory:track (all plans). Locations are gated on locations:manage (growth+ only).",
+    "Categories, products and variants are per-tenant — IDs from one tenant must 404 in another."
+  ],
+
+  "category_create": { "name": "QA Smartphones" },
+  "category_create_child": { "name": "QA Flagships", "parentId": "<CATEGORY_ID>" },
+  "category_create_empty_name": { "name": "" },
+
+  "product_create": {
+    "name": "QA Pixel 9 Pro",
+    "description": "Test handset used by the QA catalogue suite",
+    "categoryId": "<CATEGORY_ID>",
+    "imageUrl": "https://files.example.com/qa/pixel9.webp"
+  },
+  "product_create_minimal": { "name": "QA Unbranded Item" },
+  "product_update": {
+    "name": "QA Pixel 9 Pro (renamed)",
+    "description": null,
+    "isActive": true
+  },
+  "product_deactivate": { "isActive": false },
+  "product_update_unknown_field": { "priceKobo": 100000 },
+
+  "variant_create": {
+    "sku": "QA-PX9P-256-OBS",
+    "name": "256GB Obsidian",
+    "priceKobo": 125000000,
+    "costKobo": 98000000,
+    "taxRateBps": 750,
+    "attributes": "{\"storage\":\"256GB\",\"colour\":\"Obsidian\"}"
+  },
+  "variant_create_duplicate_sku": {
+    "sku": "QA-PX9P-256-OBS",
+    "name": "256GB Obsidian (dupe)",
+    "priceKobo": 125000000
+  },
+  "variant_create_negative_price": {
+    "sku": "QA-PX9P-NEG",
+    "name": "Negative price",
+    "priceKobo": -1
+  },
+  "variant_create_decimal_price": {
+    "sku": "QA-PX9P-DEC",
+    "name": "Decimal price",
+    "priceKobo": 1250.75
+  },
+  "variant_update": { "priceKobo": 119000000, "isActive": true },
+
+  "location_create": {
+    "name": "QA Ikeja Branch",
+    "address": "14 Obafemi Awolowo Way",
+    "city": "Ikeja",
+    "state": "Lagos",
+    "phone": "+2348030000002",
+    "isDefault": false
+  },
+  "location_create_minimal": { "name": "QA Pop-up Stand" },
+  "location_update": { "name": "QA Ikeja Branch (renamed)", "isDefault": true },
+
+  "inventory_receive": {
+    "variantId": "<VARIANT_ID>",
+    "locationId": "<LOCATION_ID>",
+    "quantity": 25,
+    "note": "QA opening stock"
+  },
+  "inventory_receive_zero": {
+    "variantId": "<VARIANT_ID>",
+    "locationId": "<LOCATION_ID>",
+    "quantity": 0
+  },
+  "inventory_adjust_write_off": {
+    "variantId": "<VARIANT_ID>",
+    "locationId": "<LOCATION_ID>",
+    "quantity": -3,
+    "note": "QA damaged in transit"
+  },
+  "inventory_adjust_topup": {
+    "variantId": "<VARIANT_ID>",
+    "locationId": "<LOCATION_ID>",
+    "quantity": 5,
+    "note": "QA stock count correction"
+  },
+  "inventory_adjust_below_zero": {
+    "variantId": "<VARIANT_ID>",
+    "locationId": "<LOCATION_ID>",
+    "quantity": -99999,
+    "note": "QA oversell attempt"
+  },
+
+  "_query_examples": {
+    "products_list": "?page=1&limit=20&isActive=true&search=pixel",
+    "products_by_category": "?categoryId=<CATEGORY_ID>",
+    "inventory_list": "?locationId=<LOCATION_ID>",
+    "inventory_movements": "?variantId=<VARIANT_ID>&from=2026-09-01T00:00:00.000Z&to=2026-09-30T23:59:59.000Z&page=1&limit=50",
+    "low_stock": "?locationId=<LOCATION_ID>"
+  }
+}

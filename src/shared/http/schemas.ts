@@ -32,44 +32,25 @@ export const paginatedDateRangeQuerySchema = paginationQuerySchema.extend({
   to: z.string().optional(),
 });
 
-// ─── Response wrappers for OpenAPI documentation ─────────────────────────────
-
-export function successResponseSchema<T extends z.ZodTypeAny>(dataSchema: T) {
-  return z.object({
-    success: z.literal(true),
-    data: dataSchema,
-  });
-}
-
-export function createdResponseSchema<T extends z.ZodTypeAny>(dataSchema: T) {
-  return z.object({
-    success: z.literal(true),
-    data: dataSchema,
-  });
-}
-
-export function paginatedResponseSchema<T extends z.ZodTypeAny>(itemSchema: T) {
-  return z.object({
-    success: z.literal(true),
-    data: z.object({
-      items: z.array(itemSchema),
-      total: z.number(),
-      page: z.number(),
-      limit: z.number(),
-      totalPages: z.number(),
-    }),
-  });
-}
-
-export function errorResponseSchema() {
-  return z.object({
-    success: z.literal(false),
-    error: z.object({
-      code: z.string(),
-      message: z.string(),
-    }),
-  });
-}
-
 export type PaginationQuery = z.infer<typeof paginationQuerySchema>;
 export type DateRangeQuery = z.infer<typeof dateRangeQuerySchema>;
+
+// ─── Response envelopes (documentation + serialization) ──────────────────────
+// Mirror sendSuccess() in response.ts and errorHandler() in errors/handler.ts.
+// The zod serializer validates replies against these, so keep them exact.
+
+export function successEnvelope<T extends z.ZodTypeAny>(data: T) {
+  return z.object({
+    success: z.literal(true),
+    data,
+  });
+}
+
+export const errorEnvelopeSchema = z.object({
+  success: z.literal(false),
+  error: z.object({
+    code: z.string(),
+    message: z.string(),
+    details: z.unknown().optional(),
+  }),
+});

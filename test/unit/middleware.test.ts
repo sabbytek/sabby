@@ -7,7 +7,12 @@ vi.mock('../../src/shared/db/client.js', () => ({
 }));
 
 import { db } from '../../src/shared/db/client.js';
-import { requireAuth, requireRole, requireOwner, requireManager } from '../../src/shared/middleware/auth.js';
+import {
+  requireAuth,
+  requireRole,
+  requireOwner,
+  requireManager,
+} from '../../src/shared/middleware/auth.js';
 import { resolveTenant } from '../../src/shared/middleware/tenant.js';
 import { requireFeature } from '../../src/shared/middleware/feature-gate.js';
 import {
@@ -17,7 +22,6 @@ import {
   FeatureGatedError,
 } from '../../src/shared/errors/types.js';
 import type { UserRole } from '../../src/shared/types/index.js';
-import type { FeatureKey } from '../../src/config/features.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function mockRequest(overrides: Record<string, unknown> = {}): FastifyRequest {
@@ -158,9 +162,9 @@ describe('Tenant middleware', () => {
     vi.mocked(db.select).mockReturnValue({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([
-            { id: 'tenant-1', schemaName: 't_tenant_1', isActive: false },
-          ]),
+          limit: vi
+            .fn()
+            .mockResolvedValue([{ id: 'tenant-1', schemaName: 't_tenant_1', isActive: false }]),
         }),
       }),
     } as never);
@@ -174,9 +178,9 @@ describe('Tenant middleware', () => {
     vi.mocked(db.select).mockReturnValue({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([
-            { id: 'tenant-1', schemaName: 't_tenant_1', isActive: true },
-          ]),
+          limit: vi
+            .fn()
+            .mockResolvedValue([{ id: 'tenant-1', schemaName: 't_tenant_1', isActive: true }]),
         }),
       }),
     } as never);
@@ -218,14 +222,18 @@ describe('Feature-gate middleware', () => {
     setupDbMock({ planTier: 'trial', subscriptionStatus: 'active' });
 
     const request = mockRequest({ tenant: { tenantId: 'tenant-1' } });
-    await expect(requireFeature('reporting:pl')(request, mockReply)).rejects.toThrow(FeatureGatedError);
+    await expect(requireFeature('reporting:pl')(request, mockReply)).rejects.toThrow(
+      FeatureGatedError,
+    );
   });
 
   it('throws FeatureGatedError when subscription is lapsed (non-subscription feature)', async () => {
     setupDbMock({ planTier: 'growth', subscriptionStatus: 'lapsed' });
 
     const request = mockRequest({ tenant: { tenantId: 'tenant-1' } });
-    await expect(requireFeature('reporting:pl')(request, mockReply)).rejects.toThrow(FeatureGatedError);
+    await expect(requireFeature('reporting:pl')(request, mockReply)).rejects.toThrow(
+      FeatureGatedError,
+    );
   });
 
   it('allows subscriptions:manage even when subscription is lapsed', async () => {
@@ -241,13 +249,17 @@ describe('Feature-gate middleware', () => {
     setupDbMock(undefined);
 
     const request = mockRequest({ tenant: { tenantId: 'tenant-1' } });
-    await expect(requireFeature('orders:create')(request, mockReply)).rejects.toThrow(FeatureGatedError);
+    await expect(requireFeature('orders:create')(request, mockReply)).rejects.toThrow(
+      FeatureGatedError,
+    );
   });
 
   it('throws FeatureGatedError for disallowed entry-level feature on trial plan', async () => {
     setupDbMock({ planTier: 'trial', subscriptionStatus: 'active' });
 
     const request = mockRequest({ tenant: { tenantId: 'tenant-1' } });
-    await expect(requireFeature('invoicing:generate')(request, mockReply)).rejects.toThrow(FeatureGatedError);
+    await expect(requireFeature('invoicing:generate')(request, mockReply)).rejects.toThrow(
+      FeatureGatedError,
+    );
   });
 });

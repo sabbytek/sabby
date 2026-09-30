@@ -43,7 +43,9 @@ vi.mock('../../src/modules/orders/service.js', () => {
 
   return {
     createOrder: vi.fn().mockResolvedValue(draft),
-    listOrders: vi.fn().mockResolvedValue({ items: [draft], total: 1, page: 1, limit: 20, totalPages: 1 }),
+    listOrders: vi
+      .fn()
+      .mockResolvedValue({ items: [draft], total: 1, page: 1, limit: 20, totalPages: 1 }),
     getOrder: vi.fn().mockResolvedValue(draft),
     confirmOrder: vi.fn().mockResolvedValue({ ...draft, status: 'confirmed' }),
     processOrder: vi.fn().mockResolvedValue({ ...draft, status: 'processing' }),
@@ -110,7 +112,10 @@ describe('Orders API', () => {
     });
 
     expect(response.statusCode).toBe(201);
-    const body = response.json<{ success: boolean; data: { status: string; orderNumber: string } }>();
+    const body = response.json<{
+      success: boolean;
+      data: { status: string; orderNumber: string };
+    }>();
     expect(body.success).toBe(true);
     expect(body.data.status).toBe('draft');
     expect(body.data.orderNumber).toBe('ORD-000001');

@@ -58,8 +58,12 @@ describe('assertBalanced', () => {
 describe('orderPaidTemplate', () => {
   it('produces a balanced entry', () => {
     const draft = orderPaidTemplate('payment-1', 'order-1', 100000);
-    const debits = draft.lines.filter((l) => l.type === 'debit').reduce((s, l) => s + l.amountKobo, 0);
-    const credits = draft.lines.filter((l) => l.type === 'credit').reduce((s, l) => s + l.amountKobo, 0);
+    const debits = draft.lines
+      .filter((l) => l.type === 'debit')
+      .reduce((s, l) => s + l.amountKobo, 0);
+    const credits = draft.lines
+      .filter((l) => l.type === 'credit')
+      .reduce((s, l) => s + l.amountKobo, 0);
     expect(debits).toBe(credits);
   });
 
@@ -81,8 +85,12 @@ describe('orderPaidTemplate', () => {
 describe('paymentFeeTemplate', () => {
   it('produces a balanced entry', () => {
     const draft = paymentFeeTemplate('payment-1', 1500);
-    const debits = draft.lines.filter((l) => l.type === 'debit').reduce((s, l) => s + l.amountKobo, 0);
-    const credits = draft.lines.filter((l) => l.type === 'credit').reduce((s, l) => s + l.amountKobo, 0);
+    const debits = draft.lines
+      .filter((l) => l.type === 'debit')
+      .reduce((s, l) => s + l.amountKobo, 0);
+    const credits = draft.lines
+      .filter((l) => l.type === 'credit')
+      .reduce((s, l) => s + l.amountKobo, 0);
     expect(debits).toBe(credits);
   });
 
@@ -103,8 +111,12 @@ describe('paymentFeeTemplate', () => {
 describe('orderRefundedTemplate', () => {
   it('produces a balanced entry', () => {
     const draft = orderRefundedTemplate('payment-1', 75000);
-    const debits = draft.lines.filter((l) => l.type === 'debit').reduce((s, l) => s + l.amountKobo, 0);
-    const credits = draft.lines.filter((l) => l.type === 'credit').reduce((s, l) => s + l.amountKobo, 0);
+    const debits = draft.lines
+      .filter((l) => l.type === 'debit')
+      .reduce((s, l) => s + l.amountKobo, 0);
+    const credits = draft.lines
+      .filter((l) => l.type === 'credit')
+      .reduce((s, l) => s + l.amountKobo, 0);
     expect(debits).toBe(credits);
   });
 
@@ -125,8 +137,12 @@ describe('orderRefundedTemplate', () => {
 describe('expenseRecordedTemplate', () => {
   it('produces a balanced entry', () => {
     const draft = expenseRecordedTemplate('expense-1', 20000, 'Office supplies');
-    const debits = draft.lines.filter((l) => l.type === 'debit').reduce((s, l) => s + l.amountKobo, 0);
-    const credits = draft.lines.filter((l) => l.type === 'credit').reduce((s, l) => s + l.amountKobo, 0);
+    const debits = draft.lines
+      .filter((l) => l.type === 'debit')
+      .reduce((s, l) => s + l.amountKobo, 0);
+    const credits = draft.lines
+      .filter((l) => l.type === 'credit')
+      .reduce((s, l) => s + l.amountKobo, 0);
     expect(debits).toBe(credits);
   });
 

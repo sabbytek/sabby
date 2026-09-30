@@ -1,0 +1,62 @@
+{
+  "_module": "Expenses + Invoicing + Ledger + Reporting  (/v1/expenses, /v1/invoices, /v1/ledger, /v1/reports)",
+  "_notes": [
+    "Expenses need expenses:track (entry+). Invoicing needs invoicing:generate (entry+). Ledger needs ledger:view (all plans).",
+    "Reports: /pl, /best-sellers, /pl/export need reporting:pl (entry+). /revenue-by-location needs reporting:revenue_by_location (growth+). /staff-sales and its export need reporting:staff_sales (entry+). /inventory-valuation needs reporting:margin (entry+).",
+    "Every posting must balance: for each journal entry, sum(debit) must equal sum(credit) or the request fails with LEDGER_IMBALANCE (500).",
+    "Invoice generation renders a PDF and emails it when RESEND_API_KEY is set; with the key unset the PDF is still produced and email delivery is skipped."
+  ],
+
+  "expense_create": {
+    "description": "QA September generator diesel",
+    "amountKobo": 8500000,
+    "category": "utilities",
+    "expenseDate": "2026-09-05T08:30:00.000Z",
+    "locationId": "<LOCATION_ID>",
+    "receiptUrl": "https://files.example.com/qa/receipt-diesel.webp"
+  },
+  "expense_create_minimal": {
+    "description": "QA bank charges",
+    "amountKobo": 105000,
+    "category": "other",
+    "expenseDate": "2026-09-10T00:00:00.000Z"
+  },
+  "expense_create_bad_category": {
+    "description": "QA invalid category",
+    "amountKobo": 1000,
+    "category": "entertainment",
+    "expenseDate": "2026-09-10T00:00:00.000Z"
+  },
+  "expense_create_zero_amount": {
+    "description": "QA zero",
+    "amountKobo": 0,
+    "category": "other",
+    "expenseDate": "2026-09-10T00:00:00.000Z"
+  },
+  "expense_create_bad_date": {
+    "description": "QA bad date",
+    "amountKobo": 1000,
+    "category": "other",
+    "expenseDate": "05/09/2026"
+  },
+
+  "invoice_create": { "orderId": "<ORDER_ID>" },
+  "invoice_create_unknown_order": { "orderId": "00000000-0000-0000-0000-000000000000" },
+
+  "_query_examples": {
+    "expenses_list": "?page=1&limit=20&category=utilities&locationId=<LOCATION_ID>&from=2026-09-01T00:00:00.000Z&to=2026-09-30T23:59:59.000Z",
+    "invoices_list": "?orderId=<ORDER_ID>",
+    "ledger_entries": "?page=1&limit=50&referenceType=order&referenceId=<ORDER_ID>",
+    "ledger_accounts": "(no params)",
+    "ledger_balances": "(no params)",
+    "ledger_wallet": "(no params)",
+    "report_pl": "?from=2026-09-01T00:00:00.000Z&to=2026-09-30T23:59:59.000Z   (both required, must be ISO datetimes)",
+    "report_pl_missing_range": "?from=2026-09-01T00:00:00.000Z   (expect 400)",
+    "report_best_sellers": "?from=2026-09-01T00:00:00.000Z&to=2026-09-30T23:59:59.000Z&limit=10",
+    "report_revenue_by_location": "?from=2026-09-01T00:00:00.000Z&to=2026-09-30T23:59:59.000Z",
+    "report_staff_sales": "?from=2026-09-01T00:00:00.000Z&to=2026-09-30T23:59:59.000Z",
+    "report_pl_export": "?from=2026-09-01T00:00:00.000Z&to=2026-09-30T23:59:59.000Z   (expect text/csv + Content-Disposition attachment)",
+    "report_staff_sales_export": "?from=2026-09-01T00:00:00.000Z&to=2026-09-30T23:59:59.000Z",
+    "report_inventory_valuation": "?format=json   or   ?format=csv"
+  }
+}

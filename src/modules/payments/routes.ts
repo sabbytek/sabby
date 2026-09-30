@@ -19,19 +19,23 @@ export default async function paymentsRoutes(fastify: FastifyInstance) {
   const typed = fastify.withTypeProvider<ZodTypeProvider>();
 
   // ─── POST /payments/initiate ──────────────────────────────────────────────
-  typed.post('/initiate', {
-    preHandler: [requireAuth, resolveTenant, requireFeature('orders:create')],
-    schema: {
-      tags: ['Payments'],
-      summary: 'Initiate a Paystack payment for an order',
-      security: [{ bearerAuth: [] }],
-      body: initiatePaymentBodySchema,
+  typed.post(
+    '/initiate',
+    {
+      preHandler: [requireAuth, resolveTenant, requireFeature('orders:create')],
+      schema: {
+        tags: ['Payments'],
+        summary: 'Initiate a Paystack payment for an order',
+        security: [{ bearerAuth: [] }],
+        body: initiatePaymentBodySchema,
+      },
     },
-  }, async (request, reply) => {
-    const ctx = createContext(request);
-    const result = await controller.initiate(ctx, request.body);
-    sendCreated(reply, result);
-  });
+    async (request, reply) => {
+      const ctx = createContext(request);
+      const result = await controller.initiate(ctx, request.body);
+      return sendCreated(reply, result);
+    },
+  );
 
   // ─── POST /payments/webhook/paystack ─────────────────────────────────────
   // Webhook endpoint: unauthenticated, raw body required for HMAC verification.
@@ -39,19 +43,15 @@ export default async function paymentsRoutes(fastify: FastifyInstance) {
   fastify.register(async function webhookScope(scope) {
     // Override JSON parser to capture raw body for signature verification
     scope.removeAllContentTypeParsers();
-    scope.addContentTypeParser(
-      'application/json',
-      { parseAs: 'buffer' },
-      (_req, body, done) => {
-        const raw = (body as Buffer).toString('utf-8');
-        (_req as WebhookRequest).rawBody = raw;
-        try {
-          done(null, JSON.parse(raw) as unknown);
-        } catch {
-          done(new Error('Invalid JSON body'), undefined);
-        }
-      },
-    );
+    scope.addContentTypeParser('application/json', { parseAs: 'buffer' }, (_req, body, done) => {
+      const raw = (body as Buffer).toString('utf-8');
+      (_req as WebhookRequest).rawBody = raw;
+      try {
+        done(null, JSON.parse(raw) as unknown);
+      } catch {
+        done(new Error('Invalid JSON body'), undefined);
+      }
+    });
 
     scope.post(
       '/webhook/paystack',
@@ -76,12 +76,11 @@ export default async function paymentsRoutes(fastify: FastifyInstance) {
 
           const meta = (payload.data?.metadata ?? {}) as Record<string, unknown>;
           const schemaName = (meta['schemaName'] as string | undefined) ?? '';
-          const tenantId = (meta['tenantId'] as string | undefined) ?? '';
           if (!schemaName) {
             return sendSuccess(reply, undefined);
           }
 
-          await controller.handleWebhook(tenantId, schemaName, payload.event, payload.data, meta);
+          await controller.handleWebhook(schemaName, payload.event, payload.data, meta);
           return sendSuccess(reply, undefined);
         } catch (err) {
           request.log.error({ err }, '[Webhook] Paystack processing error');
@@ -110,23 +109,40 @@ export default async function paymentsRoutes(fastify: FastifyInstance) {
             return reply.code(200).send({ received: true });
           }
 
-          const payload = request.body as { event: string; data: { txRef?: string; tx_ref?: string; metadata?: Record<string, unknown>; id?: number; status?: string; amount?: number; app_fee?: number; flw_ref?: string; created_at?: string } };
+          const payload = request.body as {
+            event: string;
+            data: {
+              txRef?: string;
+              tx_ref?: string;
+              metadata?: Record<string, unknown>;
+              id?: number;
+              status?: string;
+              amount?: number;
+              app_fee?: number;
+              flw_ref?: string;
+              created_at?: string;
+            };
+          };
 
-          const meta = (payload.data?.metadata ?? {}) as Record<string, unknown>;
+          const meta = payload.data?.metadata ?? {};
           const schemaName = (meta['schemaName'] as string | undefined) ?? '';
-          const tenantId = (meta['tenantId'] as string | undefined) ?? '';
           if (!schemaName) return sendSuccess(reply, undefined);
 
           if (payload.event === 'charge.completed' && payload.data?.status === 'successful') {
             const reference = payload.data.txRef ?? payload.data.tx_ref ?? '';
-            await controller.handleWebhook(tenantId, schemaName, 'charge.success', {
-              id: payload.data.id ?? 0,
-              reference,
-              amount: Math.round((payload.data.amount ?? 0) * 100),
-              fees: Math.round((payload.data.app_fee ?? 0) * 100),
-              status: 'success',
-              metadata: meta as { orderId?: string; schemaName?: string },
-            }, meta);
+            await controller.handleWebhook(
+              schemaName,
+              'charge.success',
+              {
+                id: payload.data.id ?? 0,
+                reference,
+                amount: Math.round((payload.data.amount ?? 0) * 100),
+                fees: Math.round((payload.data.app_fee ?? 0) * 100),
+                status: 'success',
+                metadata: meta,
+              },
+              meta,
+            );
           }
 
           return sendSuccess(reply, undefined);

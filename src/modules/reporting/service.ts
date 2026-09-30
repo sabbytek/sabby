@@ -27,19 +27,13 @@ export interface PLReport {
   netProfitKobo: number;
 }
 
-export async function getPLReport(
-  schemaName: string,
-  from: string,
-  to: string,
-): Promise<PLReport> {
+export async function getPLReport(schemaName: string, from: string, to: string): Promise<PLReport> {
   return withTenantSchema(schemaName, async (db) => {
     // Get account IDs for all relevant accounts by code
     const accountRows = await db
       .select({ id: ledgerAccounts.id, code: ledgerAccounts.code })
       .from(ledgerAccounts)
-      .where(
-        sql`${ledgerAccounts.code} IN ('4000', '5000', '5100', '5200', '5300')`,
-      );
+      .where(sql`${ledgerAccounts.code} IN ('4000', '5000', '5100', '5200', '5300')`);
 
     const codeToId = new Map(accountRows.map((a) => [a.code, a.id]));
 
@@ -70,8 +64,7 @@ export async function getPLReport(
     const refundsKobo = await sumAccount('5300', 'debit');
 
     const grossProfitKobo = revenueKobo - cogsKobo;
-    const netProfitKobo =
-      grossProfitKobo - operatingExpensesKobo - paymentFeesKobo - refundsKobo;
+    const netProfitKobo = grossProfitKobo - operatingExpensesKobo - paymentFeesKobo - refundsKobo;
 
     return {
       from,
@@ -125,7 +118,13 @@ export async function getBestSellers(
       .innerJoin(productVariants, eq(orderItems.variantId, productVariants.id))
       .innerJoin(products, eq(productVariants.productId, products.id))
       .where(and(...conditions))
-      .groupBy(products.id, products.name, productVariants.id, productVariants.name, productVariants.sku)
+      .groupBy(
+        products.id,
+        products.name,
+        productVariants.id,
+        productVariants.name,
+        productVariants.sku,
+      )
       .orderBy(desc(sql`sum(${orderItems.quantity})`))
       .limit(limit);
 
@@ -239,9 +238,7 @@ export interface InventoryValuationRow {
   totalValueKobo: number;
 }
 
-export async function getInventoryValuation(
-  schemaName: string,
-): Promise<InventoryValuationRow[]> {
+export async function getInventoryValuation(schemaName: string): Promise<InventoryValuationRow[]> {
   return withTenantSchema(schemaName, async (db) => {
     const rows = await db
       .select({

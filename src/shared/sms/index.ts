@@ -25,7 +25,9 @@ export function getSmsProvider(): SmsProvider {
   const provider = providers[providerName];
 
   if (!provider) {
-    throw new Error(`Unknown SMS provider: ${providerName}. Available: ${Object.keys(providers).join(', ')}`);
+    throw new Error(
+      `Unknown SMS provider: ${providerName}. Available: ${Object.keys(providers).join(', ')}`,
+    );
   }
 
   activeProvider = provider;

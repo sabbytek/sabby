@@ -7,6 +7,8 @@ import type { FastifyInstance } from 'fastify';
 
 vi.mock('../../src/shared/storage/r2.js', () => ({
   uploadToR2: vi.fn().mockResolvedValue('https://test.r2.example.com/test_schema/uploads/fake.jpg'),
+  uploadPrivateToR2: vi.fn().mockResolvedValue(undefined),
+  signR2Url: vi.fn(async (key: string) => `https://signed.r2.example.com/${key}?X-Amz-Signature=x`),
 }));
 
 vi.mock('../../src/shared/middleware/tenant.js', () => ({
@@ -75,12 +77,53 @@ describe('Uploads API', () => {
     expect(body.success).toBe(true);
     expect(body.data.url).toBe('https://test.r2.example.com/test_schema/uploads/fake.jpg');
 
-    expect(uploadToR2).toHaveBeenCalledWith(
-      expect.objectContaining({ contentType: 'image/jpeg' }),
-    );
+    expect(uploadToR2).toHaveBeenCalledWith(expect.objectContaining({ contentType: 'image/jpeg' }));
     const call = vi.mocked(uploadToR2).mock.calls.at(-1)!;
-    const uploadedBody = call[0].body as Buffer;
+    const uploadedBody = call[0].body;
     expect(uploadedBody.length).toBeLessThan(source.length);
+  });
+
+  it('POST /v1/uploads/image?visibility=private stores privately and returns ref + signed url', async () => {
+    const source = await sharp({
+      create: { width: 400, height: 400, channels: 3, background: 'blue' },
+    })
+      .jpeg()
+      .toBuffer();
+    const { boundary, payload } = buildMultipartPayload(source, 'receipt.jpg', 'image/jpeg');
+
+    const { uploadToR2, uploadPrivateToR2 } = await import('../../src/shared/storage/r2.js');
+    vi.mocked(uploadToR2).mockClear();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/uploads/image?visibility=private',
+      headers: {
+        Authorization: `Bearer ${bearerToken}`,
+        'content-type': `multipart/form-data; boundary=${boundary}`,
+      },
+      payload,
+    });
+
+    expect(response.statusCode).toBe(201);
+    const { data } = response.json<{ data: { url: string; ref: string } }>();
+    expect(data.ref).toMatch(/^r2:\/\/test_schema\/receipts\/[0-9a-f-]+\.\w+$/);
+    expect(data.url).toBe(`https://signed.r2.example.com/${data.ref.slice('r2://'.length)}?X-Amz-Signature=x`);
+    expect(uploadPrivateToR2).toHaveBeenCalledTimes(1);
+    expect(uploadToR2).not.toHaveBeenCalled();
+  });
+
+  it('POST /v1/uploads/image rejects an unknown visibility', async () => {
+    const { boundary, payload } = buildMultipartPayload(Buffer.from('x'), 'a.jpg', 'image/jpeg');
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/uploads/image?visibility=secret',
+      headers: {
+        Authorization: `Bearer ${bearerToken}`,
+        'content-type': `multipart/form-data; boundary=${boundary}`,
+      },
+      payload,
+    });
+    expect(response.statusCode).toBe(400);
   });
 
   it('POST /v1/uploads/image rejects an unsupported mime type', async () => {

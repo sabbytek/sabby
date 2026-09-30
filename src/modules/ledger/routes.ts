@@ -13,59 +13,75 @@ export default async function ledgerRoutes(fastify: FastifyInstance) {
   const guard = [requireAuth, resolveTenant, requireFeature('ledger:view')];
 
   // GET /ledger/accounts — chart of accounts
-  typed.get('/accounts', {
-    preHandler: guard,
-    schema: {
-      tags: ['Ledger'],
-      summary: 'List chart of accounts',
-      security: [{ bearerAuth: [] }],
+  typed.get(
+    '/accounts',
+    {
+      preHandler: guard,
+      schema: {
+        tags: ['Ledger'],
+        summary: 'List chart of accounts',
+        security: [{ bearerAuth: [] }],
+      },
     },
-  }, async (request, reply) => {
-    const ctx = createContext(request);
-    const accounts = await controller.listAccounts(ctx);
-    sendSuccess(reply, accounts);
-  });
+    async (request, reply) => {
+      const ctx = createContext(request);
+      const accounts = await controller.listAccounts(ctx);
+      sendSuccess(reply, accounts);
+    },
+  );
 
   // GET /ledger/balances — account balances with debit/credit totals
-  typed.get('/balances', {
-    preHandler: guard,
-    schema: {
-      tags: ['Ledger'],
-      summary: 'Get account balances (derived from ledger)',
-      security: [{ bearerAuth: [] }],
+  typed.get(
+    '/balances',
+    {
+      preHandler: guard,
+      schema: {
+        tags: ['Ledger'],
+        summary: 'Get account balances (derived from ledger)',
+        security: [{ bearerAuth: [] }],
+      },
     },
-  }, async (request, reply) => {
-    const ctx = createContext(request);
-    const balances = await controller.listBalances(ctx);
-    sendSuccess(reply, balances);
-  });
+    async (request, reply) => {
+      const ctx = createContext(request);
+      const balances = await controller.listBalances(ctx);
+      sendSuccess(reply, balances);
+    },
+  );
 
   // GET /ledger/wallet — cash account balance
-  typed.get('/wallet', {
-    preHandler: guard,
-    schema: {
-      tags: ['Ledger'],
-      summary: 'Get platform wallet balance (cash account)',
-      security: [{ bearerAuth: [] }],
+  typed.get(
+    '/wallet',
+    {
+      preHandler: guard,
+      schema: {
+        tags: ['Ledger'],
+        summary: 'Get platform wallet balance (cash account)',
+        security: [{ bearerAuth: [] }],
+      },
     },
-  }, async (request, reply) => {
-    const ctx = createContext(request);
-    const wallet = await controller.walletBalance(ctx);
-    sendSuccess(reply, wallet);
-  });
+    async (request, reply) => {
+      const ctx = createContext(request);
+      const wallet = await controller.walletBalance(ctx);
+      sendSuccess(reply, wallet);
+    },
+  );
 
   // GET /ledger/entries — paginated journal entries
-  typed.get('/entries', {
-    preHandler: guard,
-    schema: {
-      tags: ['Ledger'],
-      summary: 'List journal entries',
-      security: [{ bearerAuth: [] }],
-      querystring: listEntriesQuerySchema,
+  typed.get(
+    '/entries',
+    {
+      preHandler: guard,
+      schema: {
+        tags: ['Ledger'],
+        summary: 'List journal entries',
+        security: [{ bearerAuth: [] }],
+        querystring: listEntriesQuerySchema,
+      },
     },
-  }, async (request, reply) => {
-    const ctx = createContext(request);
-    const result = await controller.listEntries(ctx, request.query);
-    sendSuccess(reply, result);
-  });
+    async (request, reply) => {
+      const ctx = createContext(request);
+      const result = await controller.listEntries(ctx, request.query);
+      sendSuccess(reply, result);
+    },
+  );
 }

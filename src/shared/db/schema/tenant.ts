@@ -13,7 +13,6 @@ import {
   pgEnum,
   uniqueIndex,
   index,
-  numeric,
   jsonb,
   real,
 } from 'drizzle-orm/pg-core';
@@ -135,7 +134,6 @@ export const productVariants = pgTable(
       .notNull()
       .references(() => products.id, { onDelete: 'cascade' }),
     sku: text('sku').notNull(),
-    barcode: text('barcode'), // EAN-13, UPC-A, Code 128, etc. — optional, unique when provided
     name: text('name').notNull(),
     // All monetary values stored in kobo (smallest NGN unit = 1/100 of a naira)
     priceKobo: integer('price_kobo').notNull(),
@@ -143,7 +141,7 @@ export const productVariants = pgTable(
     // Tax rate in basis points (10000 = 100%). Nigeria standard VAT = 750 (7.5%).
     // null = no tax / inherit from business default. Only visible to manager+.
     taxRateBps: integer('tax_rate_bps'),
-    attributes: text('attributes'), // JSON string: { color: 'red', size: 'M' }
+    attributes: jsonb('attributes'), // JSON: { color: 'red', size: 'M' }
     weightKg: real('weight_kg'), // optional — required for weight-based shipping rates
     isActive: boolean('is_active').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -151,7 +149,6 @@ export const productVariants = pgTable(
   },
   (table) => ({
     skuIdx: uniqueIndex('product_variants_sku_idx').on(table.sku),
-    barcodeIdx: uniqueIndex('product_variants_barcode_idx').on(table.barcode),
     productIdx: index('product_variants_product_idx').on(table.productId),
   }),
 );
@@ -187,7 +184,9 @@ export const stockMovements = pgTable(
     variantId: text('variant_id')
       .notNull()
       .references(() => productVariants.id),
-    locationId: text('location_id').notNull().references(() => locations.id),
+    locationId: text('location_id')
+      .notNull()
+      .references(() => locations.id),
     type: stockMovementTypeEnum('type').notNull(),
     quantity: integer('quantity').notNull(),
     referenceId: text('reference_id'), // orderId, purchaseOrderId, etc.
@@ -603,6 +602,41 @@ export const pickupLocations = pgTable(
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+// ─── Merchant-visible activity trail ─────────────────────────────────────────
+//
+// Lives in the TENANT schema, so it is the merchant's own record — distinct
+// from public.platform_audit_log, which is the platform's internal record.
+// Platform staff access to this tenant is written here too, so a merchant can
+// always see who from BPOS looked at their business and why.
+
+export const auditActorTypeEnum = pgEnum('audit_actor_type', ['user', 'platform', 'system']);
+
+export const auditLog = pgTable(
+  'audit_log',
+  {
+    id: text('id').primaryKey(),
+    actorType: auditActorTypeEnum('actor_type').notNull(),
+    // Null for 'system'. For 'platform' this is the platform_users.id — the
+    // tenant schema deliberately holds no FK to the platform plane.
+    actorId: text('actor_id'),
+    actorEmail: text('actor_email'),
+    action: text('action').notNull(), // e.g. 'support.access_granted', 'order.cancelled'
+    targetType: text('target_type'),
+    targetId: text('target_id'),
+    reason: text('reason'),
+    metadata: jsonb('metadata'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    createdIdx: index('audit_log_created_idx').on(table.createdAt),
+    actorTypeIdx: index('audit_log_actor_type_idx').on(table.actorType),
+    actionIdx: index('audit_log_action_idx').on(table.action),
+  }),
+);
+
+export type AuditLogEntry = typeof auditLog.$inferSelect;
+export type NewAuditLogEntry = typeof auditLog.$inferInsert;
+
 export type Location = typeof locations.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type NewProduct = typeof products.$inferInsert;

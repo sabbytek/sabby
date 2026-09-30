@@ -22,7 +22,9 @@ vi.mock('../../src/modules/invoicing/service.js', () => {
 
   return {
     generateInvoice: vi.fn().mockResolvedValue(invoice),
-    listInvoices: vi.fn().mockResolvedValue({ items: [invoice], total: 1, page: 1, limit: 20, totalPages: 1 }),
+    listInvoices: vi
+      .fn()
+      .mockResolvedValue({ items: [invoice], total: 1, page: 1, limit: 20, totalPages: 1 }),
     getInvoice: vi.fn().mockResolvedValue(invoice),
   };
 });

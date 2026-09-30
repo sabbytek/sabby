@@ -1,4 +1,5 @@
 import type { PlanTier } from '../../config/features.js';
+import type { PlatformRole } from '../../config/platform-permissions.js';
 
 export interface TenantContext {
   tenantId: string;
@@ -14,21 +15,24 @@ export interface AuthUser {
 
 export type UserRole = 'owner' | 'manager' | 'staff' | 'viewer';
 
-// ─── Platform ops plane ────────────────────────────────────────────────────────
-// Cross-tenant staff identities. A platform user has NO tenant scope.
-
-export type PlatformRole = 'support' | 'admin' | 'super_admin';
-
+/**
+ * Authenticated internal-staff identity. Deliberately has NO tenantId —
+ * a platform user belongs to no tenant. Cross-tenant reach is granted
+ * per-tenant and time-boxed via tenant_access_grants (Phase B), never
+ * implied by the identity itself.
+ */
 export interface PlatformAuthUser {
-  userId: string;
-  email: string;
+  platformUserId: string;
   role: PlatformRole;
+  email: string;
 }
 
+/** Payload carried in a platform access token. `aud` separates the planes. */
 export interface PlatformJwtPayload {
-  sub: string; // platform user id
+  sub: string; // platformUserId
   role: PlatformRole;
   email: string;
+  aud: 'platform';
   type: 'access';
 }
 
@@ -49,19 +53,19 @@ export interface TenantRecord {
   createdAt: Date;
 }
 
-export type ApiSuccess<T> = {
+export interface ApiSuccess<T> {
   success: true;
   data: T;
-};
+}
 
-export type ApiError = {
+export interface ApiError {
   success: false;
   error: {
     code: string;
     message: string;
     details?: unknown;
   };
-};
+}
 
 export type ApiResponse<T> = ApiSuccess<T> | ApiError;
 

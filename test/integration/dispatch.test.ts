@@ -79,7 +79,7 @@ describe('POST /v1/dispatch/configure', () => {
       },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { success: boolean; data: { provider: string; webhookUrl: string } };
+    const body = res.json();
     expect(body.success).toBe(true);
     expect(body.data.provider).toBe('traka');
     expect(body.data.webhookUrl).toContain('/v1/dispatch/webhook/traka/tenant-test');
@@ -118,7 +118,7 @@ describe('GET /v1/dispatch/config', () => {
       headers: { authorization: `Bearer ${staffToken}` },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { success: boolean; data: { providerName: string; apiKey: string } };
+    const body = res.json();
     expect(body.data.providerName).toBe('traka');
     expect(body.data.apiKey).toBe('****'); // never expose plaintext
   });
@@ -137,7 +137,7 @@ describe('POST /v1/dispatch/quote', () => {
       },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { success: boolean; data: { feeKobo: number; estimatedMinutes: number } };
+    const body = res.json();
     expect(body.data.feeKobo).toBe(150000);
     expect(body.data.estimatedMinutes).toBe(120);
   });
@@ -167,7 +167,7 @@ describe('POST /v1/dispatch/:orderId/dispatch', () => {
       },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { success: boolean; data: { trackingNumber: string; logisticsReference: string } };
+    const body = res.json();
     expect(body.data.trackingNumber).toBe('TRK-123456');
     expect(body.data.logisticsReference).toBe('traka-order-abc');
   });
@@ -181,7 +181,7 @@ describe('GET /v1/dispatch/:orderId/track', () => {
       headers: { authorization: `Bearer ${staffToken}` },
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { success: boolean; data: { status: string; location: string } };
+    const body = res.json();
     expect(body.data.status).toBe('in_transit');
     expect(body.data.location).toBe('Lagos Mainland Hub');
   });
@@ -203,7 +203,7 @@ describe('POST /v1/dispatch/webhook/:provider/:tenantId', () => {
       payload,
     });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { received: boolean };
+    const body = res.json();
     expect(body.received).toBe(true);
   });
 

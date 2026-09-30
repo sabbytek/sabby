@@ -78,7 +78,10 @@ describe('Payments API', () => {
     });
 
     expect(response.statusCode).toBe(201);
-    const body = response.json<{ success: boolean; data: { authorizationUrl: string; reference: string } }>();
+    const body = response.json<{
+      success: boolean;
+      data: { authorizationUrl: string; reference: string };
+    }>();
     expect(body.success).toBe(true);
     expect(body.data.authorizationUrl).toBe('https://checkout.paystack.com/testref');
     expect(body.data.reference).toBe('bpos-test-ref-001');

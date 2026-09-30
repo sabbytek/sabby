@@ -14,7 +14,11 @@ export const genericDispatchGateway: DispatchGateway = {
       { headers: { Authorization: `Bearer ${apiKey}` } },
     );
     if (!res.ok) throw new Error(`Provider quote failed: ${res.status}`);
-    const body = await res.json() as { fee_ngn: number; estimated_minutes: number; reference: string };
+    const body = (await res.json()) as {
+      fee_ngn: number;
+      estimated_minutes: number;
+      reference: string;
+    };
     return {
       feeKobo: Math.round(body.fee_ngn * 100),
       estimatedMinutes: body.estimated_minutes,
@@ -37,7 +41,7 @@ export const genericDispatchGateway: DispatchGateway = {
       }),
     });
     if (!res.ok) throw new Error(`Provider shipment creation failed: ${res.status}`);
-    const body = await res.json() as {
+    const body = (await res.json()) as {
       tracking_number: string;
       logistics_reference: string;
       estimated_delivery_at: string;
@@ -62,8 +66,11 @@ export const genericDispatchGateway: DispatchGateway = {
     const url = `https://api.logistics-provider.example.com/v1/shipments/${reference}`;
     const res = await fetch(url, { headers: { Authorization: `Bearer ${apiKey}` } });
     if (!res.ok) throw new Error(`Provider tracking failed: ${res.status}`);
-    const body = await res.json() as { status: string; location?: string };
-    return { status: body.status, ...(body.location !== undefined ? { location: body.location } : {}) };
+    const body = (await res.json()) as { status: string; location?: string };
+    return {
+      status: body.status,
+      ...(body.location !== undefined ? { location: body.location } : {}),
+    };
   },
 
   validateWebhookSignature(rawBody, signature, webhookSecret) {

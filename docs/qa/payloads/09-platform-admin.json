@@ -1,0 +1,134 @@
+{
+  "_module": "Platform (internal admin) plane  (/v1/platform)",
+  "_notes": [
+    "The whole plane is mounted ONLY when JWT_PLATFORM_SECRET (>=32 chars) is set. Unset => every /v1/platform/* route 404s. That is the first thing to check before filing an admin bug.",
+    "Platform tokens are signed with a different secret and carry aud=platform, type=access. A merchant token must never satisfy a platform route, and vice versa — test both directions.",
+    "super_admin and admin cannot log in on a password alone: they must enrol TOTP first. support and read_only log in without MFA.",
+    "TOTP enrolment needs PLATFORM_ENCRYPTION_KEY (64 hex chars) — the secret is stored AES-256-GCM encrypted.",
+    "Every state-changing body requires reason: 10-500 characters. A shorter reason is a 400.",
+    "The account is re-read from the DB on every request: deactivating a platform user invalidates their live access token immediately, not at expiry.",
+    "Permissions: read_only = tenants:read, audit:read, analytics:read, billing:read. support adds the six support:* permissions. admin adds tenants:create/suspend/change_plan and platform_users:read. super_admin adds tenants:delete, tenants:override_features, platform_users:manage, billing:refund."
+  ],
+
+  "login_support": { "email": "support.qa@sabby.ng", "password": "SupportQAPass1!" },
+  "login_admin_with_mfa": { "email": "admin.qa@sabby.ng", "password": "Admin<GROWTH_OWNER_PASSWORD>", "totpCode": "123456" },
+  "login_admin_without_mfa": { "email": "admin.qa@sabby.ng", "password": "Admin<GROWTH_OWNER_PASSWORD>" },
+  "login_bad_password": { "email": "support.qa@sabby.ng", "password": "WrongPassword1!" },
+  "login_unknown_account": { "email": "ghost.qa@sabby.ng", "password": "SomePassword1!" },
+  "login_bad_totp_format": { "email": "admin.qa@sabby.ng", "password": "Admin<GROWTH_OWNER_PASSWORD>", "totpCode": "12345" },
+  "refresh": { "refreshToken": "<PLATFORM_REFRESH_TOKEN>" },
+  "logout": { "refreshToken": "<PLATFORM_REFRESH_TOKEN>" },
+  "mfa_verify": { "code": "123456" },
+
+  "tenant_create": {
+    "name": "QA Admin-Provisioned Store",
+    "slug": "qa-admin-provisioned",
+    "businessEmail": "owner@qa-admin-provisioned.ng",
+    "businessPhone": "+2348030000050",
+    "ownerFirstName": "Ifeoma",
+    "ownerLastName": "Balogun",
+    "ownerPassword": "QAPassword3!",
+    "reason": "QA-TENANT-01: provisioning a tenant on the merchant's behalf during onboarding call"
+  },
+  "tenant_create_no_reason": {
+    "name": "QA No Reason",
+    "slug": "qa-no-reason",
+    "businessEmail": "owner@qa-no-reason.ng",
+    "ownerFirstName": "No",
+    "ownerLastName": "Reason",
+    "ownerPassword": "QAPassword3!"
+  },
+  "tenant_create_short_reason": {
+    "name": "QA Short Reason",
+    "slug": "qa-short-reason",
+    "businessEmail": "owner@qa-short-reason.ng",
+    "ownerFirstName": "Short",
+    "ownerLastName": "Reason",
+    "ownerPassword": "QAPassword3!",
+    "reason": "because"
+  },
+  "tenant_suspend": { "reason": "QA-TENANT-04: suspending for non-payment after three failed charge attempts" },
+  "tenant_reactivate": { "reason": "QA-TENANT-05: merchant settled the outstanding invoice, restoring access" },
+  "tenant_change_plan_growth": { "planTier": "growth", "reason": "QA-TENANT-06: merchant upgraded to growth on an annual contract" },
+  "tenant_change_plan_trial": { "planTier": "trial", "reason": "QA-TENANT-07: downgrade to trial to verify the feature gates close again" },
+  "tenant_change_plan_invalid": { "planTier": "platinum", "reason": "QA-TENANT-08: invalid tier must be rejected by the enum" },
+
+  "platform_user_create_support": {
+    "email": "support2.qa@sabby.ng",
+    "firstName": "Support",
+    "lastName": "Two",
+    "role": "support",
+    "temporaryPassword": "TempPlatformPass123!",
+    "reason": "QA-PUSER-01: onboarding a second support agent for the QA rota"
+  },
+  "platform_user_create_short_password": {
+    "email": "support3.qa@sabby.ng",
+    "firstName": "Support",
+    "lastName": "Three",
+    "role": "support",
+    "temporaryPassword": "Short1!",
+    "reason": "QA-PUSER-02: the console requires at least 12 characters"
+  },
+  "platform_user_create_bad_role": {
+    "email": "support4.qa@sabby.ng",
+    "firstName": "Support",
+    "lastName": "Four",
+    "role": "owner",
+    "temporaryPassword": "TempPlatformPass123!",
+    "reason": "QA-PUSER-03: merchant roles must not be accepted on the platform plane"
+  },
+  "platform_user_update_role": { "role": "admin", "reason": "QA-PUSER-04: promoting the agent to admin for escalation duty" },
+  "platform_user_deactivate": { "isActive": false, "reason": "QA-PUSER-05: agent left the company, revoking console access" },
+  "platform_user_update_no_fields": { "reason": "QA-PUSER-06: a reason alone is not an update and must be rejected" },
+  "platform_user_reset_password": { "reason": "QA-PUSER-07: agent reported a forgotten password on the support line" },
+
+  "grant_open_read": {
+    "tenantId": "<TENANT_ID>",
+    "scope": "read",
+    "reason": "QA-SUP-01: merchant ticket #4412 — investigating a missing order confirmation",
+    "durationMinutes": 30
+  },
+  "grant_open_write": {
+    "tenantId": "<TENANT_ID>",
+    "scope": "write",
+    "reason": "QA-SUP-02: merchant ticket #4413 — re-sending a receipt the customer never received",
+    "durationMinutes": 60
+  },
+  "grant_open_over_cap": {
+    "tenantId": "<TENANT_ID>",
+    "scope": "read",
+    "reason": "QA-SUP-03: duration above the 24h cap must be rejected",
+    "durationMinutes": 2880
+  },
+  "grant_open_under_min": {
+    "tenantId": "<TENANT_ID>",
+    "scope": "read",
+    "reason": "QA-SUP-04: duration below the 5 minute floor must be rejected",
+    "durationMinutes": 1
+  },
+  "grant_open_no_reason": { "tenantId": "<TENANT_ID>", "scope": "read" },
+
+  "support_resend_receipt": { "invoiceId": "<INVOICE_ID>" },
+  "support_retry_webhook": {
+    "rawPayload": "{\"event\":\"charge.success\",\"data\":{\"id\":302961,\"reference\":\"<REFERENCE>\",\"amount\":125000000,\"status\":\"success\",\"metadata\":{\"orderId\":\"<ORDER_ID>\",\"schemaName\":\"t_<TENANT_ID_WITH_UNDERSCORES>\"}}}"
+  },
+  "support_unlock_account": {
+    "userId": "<MERCHANT_USER_ID>",
+    "reason": "QA-SUP-08: merchant owner locked out after repeated failed logins, verified by phone"
+  },
+  "support_reset_password": {
+    "email": "<GROWTH_OWNER_EMAIL>",
+    "reason": "QA-SUP-09: merchant requested a password reset link on the support call"
+  },
+
+  "_query_examples": {
+    "tenants_list": "?page=1&limit=20&search=<part of a merchant name>&planTier=growth&isActive=true",
+    "tenants_list_limit_over_cap": "?limit=500   (expect 400 — max is 100)",
+    "platform_users_list": "?page=1&limit=20&role=support&isActive=true",
+    "audit_list": "?page=1&limit=50&action=tenant.suspend&tenantId=<TENANT_ID>&from=2026-09-01&to=2026-09-30",
+    "audit_by_actor": "?actorId=<PLATFORM_USER_ID>",
+    "grants_list": "?tenantId=<TENANT_ID>&activeOnly=true&page=1&limit=20",
+    "support_tenant_orders": "GET /v1/platform/support/tenants/<TENANT_ID>/orders?page=1&limit=20",
+    "overview": "GET /v1/platform/overview   (needs tenants:read)"
+  }
+}

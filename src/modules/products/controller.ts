@@ -1,5 +1,6 @@
 import type { RequestContext } from '../../shared/types/controller.js';
 import type { ProductVariant } from '../../shared/db/schema/tenant.js';
+import { auditUserAction } from '../../shared/audit/tenant-audit.js';
 import {
   createCategory,
   listCategories,
@@ -9,11 +10,12 @@ import {
   updateProduct,
   createVariant,
   updateVariant,
-  getVariantByBarcode,
-  type VariantWithProduct,
 } from './service.js';
 
-function sanitizeVariant(v: ProductVariant, hideMargin: boolean): Omit<ProductVariant, 'costKobo'> | ProductVariant {
+function sanitizeVariant(
+  v: ProductVariant,
+  hideMargin: boolean,
+): Omit<ProductVariant, 'costKobo'> | ProductVariant {
   if (!hideMargin) return v;
   const { costKobo: _cost, ...safe } = v;
   return safe;
@@ -22,14 +24,19 @@ function sanitizeVariant(v: ProductVariant, hideMargin: boolean): Omit<ProductVa
 export async function createCategoryHandler(
   ctx: RequestContext,
   input: { name: string; parentId?: string },
-): Promise<unknown> {
-  const result = await createCategory(ctx.schema, input);
-  return result;
+) {
+  const category = await createCategory(ctx.schema, input);
+  await auditUserAction(ctx, {
+    action: 'category.created',
+    targetType: 'category',
+    targetId: category.id,
+    metadata: { name: input.name },
+  });
+  return category;
 }
 
-export async function listCategoriesHandler(ctx: RequestContext): Promise<unknown> {
-  const result = await listCategories(ctx.schema);
-  return result;
+export async function listCategoriesHandler(ctx: RequestContext) {
+  return listCategories(ctx.schema);
 }
 
 export async function createProductHandler(
@@ -40,9 +47,15 @@ export async function createProductHandler(
     categoryId?: string;
     imageUrl?: string;
   },
-): Promise<unknown> {
-  const result = await createProduct(ctx.schema, input);
-  return result;
+) {
+  const product = await createProduct(ctx.schema, input);
+  await auditUserAction(ctx, {
+    action: 'product.created',
+    targetType: 'product',
+    targetId: product.id,
+    metadata: { name: input.name },
+  });
+  return product;
 }
 
 export async function listProductsHandler(
@@ -54,18 +67,17 @@ export async function listProductsHandler(
     isActive?: string;
     search?: string;
   },
-): Promise<unknown> {
-  const result = await listProducts(ctx.schema, {
+) {
+  return listProducts(ctx.schema, {
     ...(query.page && { page: parseInt(query.page) }),
     ...(query.limit && { limit: parseInt(query.limit) }),
     ...(query.categoryId && { categoryId: query.categoryId }),
     ...(query.isActive !== undefined && { isActive: query.isActive === 'true' }),
     ...(query.search && { search: query.search }),
   });
-  return result;
 }
 
-export async function getProductHandler(ctx: RequestContext, id: string): Promise<unknown> {
+export async function getProductHandler(ctx: RequestContext, id: string) {
   const product = await getProduct(ctx.schema, id);
   const hideMargin = ctx.role === 'staff';
   return {
@@ -84,9 +96,15 @@ export async function updateProductHandler(
     imageUrl: string | null;
     isActive: boolean;
   }>,
-): Promise<unknown> {
-  const result = await updateProduct(ctx.schema, id, input);
-  return result;
+) {
+  const product = await updateProduct(ctx.schema, id, input);
+  await auditUserAction(ctx, {
+    action: 'product.updated',
+    targetType: 'product',
+    targetId: id,
+    metadata: { fields: Object.keys(input) },
+  });
+  return product;
 }
 
 export async function createVariantHandler(
@@ -94,16 +112,21 @@ export async function createVariantHandler(
   productId: string,
   input: {
     sku: string;
-    barcode?: string;
     name: string;
     priceKobo: number;
     costKobo?: number;
     taxRateBps?: number;
     attributes?: string;
   },
-): Promise<unknown> {
-  const result = await createVariant(ctx.schema, productId, input);
-  return result;
+) {
+  const variant = await createVariant(ctx.schema, productId, input);
+  await auditUserAction(ctx, {
+    action: 'product.variant_created',
+    targetType: 'product_variant',
+    targetId: variant.id,
+    metadata: { productId, sku: input.sku, priceKobo: input.priceKobo },
+  });
+  return variant;
 }
 
 export async function updateVariantHandler(
@@ -111,7 +134,6 @@ export async function updateVariantHandler(
   productId: string,
   variantId: string,
   input: Partial<{
-    barcode: string | null;
     name: string;
     priceKobo: number;
     costKobo: number;
@@ -119,22 +141,17 @@ export async function updateVariantHandler(
     attributes: string | null;
     isActive: boolean;
   }>,
-): Promise<unknown> {
-  const result = await updateVariant(ctx.schema, productId, variantId, input);
-  return result;
-}
-
-export async function getVariantByBarcodeHandler(
-  ctx: RequestContext,
-  barcode: string,
-): Promise<VariantWithProduct | null> {
-  const variant = await getVariantByBarcode(ctx.schema, barcode);
-  if (!variant) return null;
-
-  // Hide costKobo for staff users
-  if (ctx.role === 'staff') {
-    const { costKobo: _cost, ...safe } = variant;
-    return safe as VariantWithProduct;
-  }
+) {
+  const variant = await updateVariant(ctx.schema, productId, variantId, input);
+  await auditUserAction(ctx, {
+    action: 'product.variant_updated',
+    targetType: 'product_variant',
+    targetId: variantId,
+    metadata: {
+      productId,
+      fields: Object.keys(input),
+      ...(input.priceKobo !== undefined && { priceKobo: input.priceKobo }),
+    },
+  });
   return variant;
 }

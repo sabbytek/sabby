@@ -1,0 +1,93 @@
+{
+  "_module": "Tenants + Auth  (/v1/tenants, /v1/auth)",
+  "_notes": [
+    "Signup is PUBLIC — no token. It provisions a Postgres schema per tenant, so it is slow (2-5s) on first run.",
+    "slug must match ^[a-z0-9-]+$ and is the tenant handle used on every login.",
+    "All bodies are .strict() — an unknown key is a 400 VALIDATION_ERROR, not a silently ignored field."
+  ],
+
+  "signup_valid": {
+    "name": "QA Test Store",
+    "slug": "qa-test-store",
+    "businessEmail": "owner@qateststore.ng",
+    "businessPhone": "+2348030000001",
+    "ownerFirstName": "Ada",
+    "ownerLastName": "Obi",
+    "ownerPassword": "<GROWTH_OWNER_PASSWORD>"
+  },
+  "signup_duplicate_slug": {
+    "name": "QA Test Store Clone",
+    "slug": "qa-test-store",
+    "businessEmail": "other@qateststore.ng",
+    "ownerFirstName": "Ada",
+    "ownerLastName": "Obi",
+    "ownerPassword": "<GROWTH_OWNER_PASSWORD>"
+  },
+  "signup_invalid_slug": {
+    "name": "QA Bad Slug",
+    "slug": "QA Test Store!",
+    "businessEmail": "bad@qateststore.ng",
+    "ownerFirstName": "Ada",
+    "ownerLastName": "Obi",
+    "ownerPassword": "<GROWTH_OWNER_PASSWORD>"
+  },
+  "signup_short_password": {
+    "name": "QA Weak Password",
+    "slug": "qa-weak-pw",
+    "businessEmail": "weak@qateststore.ng",
+    "ownerFirstName": "Ada",
+    "ownerLastName": "Obi",
+    "ownerPassword": "short"
+  },
+  "signup_unknown_field": {
+    "name": "QA Extra Field",
+    "slug": "qa-extra-field",
+    "businessEmail": "extra@qateststore.ng",
+    "ownerFirstName": "Ada",
+    "ownerLastName": "Obi",
+    "ownerPassword": "<GROWTH_OWNER_PASSWORD>",
+    "planTier": "enterprise"
+  },
+
+  "login_growth_owner": {
+    "tenantSlug": "<GROWTH_MERCHANT_SLUG>",
+    "email": "<GROWTH_OWNER_EMAIL>",
+    "password": "<GROWTH_OWNER_PASSWORD>"
+  },
+  "login_entry_owner": {
+    "tenantSlug": "<ENTRY_MERCHANT_SLUG>",
+    "email": "<ENTRY_OWNER_EMAIL>",
+    "password": "<ENTRY_OWNER_PASSWORD>"
+  },
+  "login_wrong_password": {
+    "tenantSlug": "<GROWTH_MERCHANT_SLUG>",
+    "email": "<GROWTH_OWNER_EMAIL>",
+    "password": "WrongPassword1!"
+  },
+  "login_wrong_tenant": {
+    "tenantSlug": "<ENTRY_MERCHANT_SLUG>",
+    "email": "<GROWTH_OWNER_EMAIL>",
+    "password": "<GROWTH_OWNER_PASSWORD>"
+  },
+
+  "refresh": {
+    "tenantSlug": "<GROWTH_MERCHANT_SLUG>",
+    "refreshToken": "<REFRESH_TOKEN_FROM_LOGIN>"
+  },
+  "logout": {
+    "refreshToken": "<REFRESH_TOKEN_FROM_LOGIN>"
+  },
+  "forgot_password": {
+    "tenantSlug": "<GROWTH_MERCHANT_SLUG>",
+    "email": "<GROWTH_OWNER_EMAIL>"
+  },
+  "forgot_password_unknown_email": {
+    "tenantSlug": "<GROWTH_MERCHANT_SLUG>",
+    "email": "does-not-exist@nowhere.ng"
+  },
+  "reset_password": {
+    "tenantSlug": "<GROWTH_MERCHANT_SLUG>",
+    "token": "<TOKEN_FROM_RESET_EMAIL>",
+    "newPassword": "<GROWTH_OWNER_PASSWORD>New"
+  }
+}
