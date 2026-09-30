@@ -121,10 +121,11 @@ export function buildApp() {
   });
 
   // Health check: full readiness probe with DB + Redis + queue status
-  // Returns 503 for degraded or error so orchestrators can act
+  // degraded (1 component down) -> 200 so Render doesn't restart the app
+  // error (2+ components down)  -> 503
   app.get('/health', { schema: { hide: true } }, async (_request, reply) => {
     const health = await runHealthChecks();
-    const statusCode = health.status === 'ok' ? 200 : 503;
+    const statusCode = health.status === 'error' ? 503 : 200;
     return reply.status(statusCode).send(health);
   });
 
