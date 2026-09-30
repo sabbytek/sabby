@@ -45,11 +45,14 @@ export const cache = new Proxy({} as Redis, {
 });
 
 export function isRedisAvailable(): boolean {
+  // The connection is lazy — make sure an attempt has been started, otherwise
+  // callers that gate on this flag would never trigger it.
+  getCache();
   return _redisAvailable;
 }
 
 export async function cacheGet<T>(key: string): Promise<T | null> {
-  if (!_redisAvailable) return null;
+  if (!isRedisAvailable()) return null;
   try {
     const value = await getCache().get(key);
     if (!value) return null;
@@ -60,7 +63,7 @@ export async function cacheGet<T>(key: string): Promise<T | null> {
 }
 
 export async function cacheSet(key: string, value: unknown, ttlSeconds = 300): Promise<void> {
-  if (!_redisAvailable) return;
+  if (!isRedisAvailable()) return;
   try {
     await getCache().set(key, JSON.stringify(value), 'EX', ttlSeconds);
   } catch {
@@ -69,7 +72,7 @@ export async function cacheSet(key: string, value: unknown, ttlSeconds = 300): P
 }
 
 export async function cacheDel(key: string): Promise<void> {
-  if (!_redisAvailable) return;
+  if (!isRedisAvailable()) return;
   try {
     await getCache().del(key);
   } catch {
@@ -78,7 +81,7 @@ export async function cacheDel(key: string): Promise<void> {
 }
 
 export async function cacheDelPattern(pattern: string): Promise<void> {
-  if (!_redisAvailable) return;
+  if (!isRedisAvailable()) return;
   try {
     const stream = getCache().scanStream({ match: pattern, count: 100 }) as AsyncIterable<string[]>;
     for await (const keys of stream) {
