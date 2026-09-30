@@ -15,6 +15,9 @@ function getRedisConnection(): ConnectionOptions {
     retryStrategy: (times: number) => (times > 10 ? null : Math.min(times * 200, 3000)),
     enableOfflineQueue: false,
     lazyConnect: true,
+    // Managed Redis (e.g. Upstash) only accepts TLS; the scheme is lost when
+    // the URL is split into host/port, so carry it over explicitly.
+    ...(url.protocol === 'rediss:' ? { tls: {} } : {}),
   };
 }
 
@@ -30,7 +33,7 @@ export const QUEUES = {
 
 // Typed queue factory
 export function createQueue<T>(name: string) {
-  return new Queue<T>(name, {
+  const queue = new Queue<T>(name, {
     connection: redisConnection,
     defaultJobOptions: {
       attempts: 3,
@@ -39,14 +42,23 @@ export function createQueue<T>(name: string) {
       removeOnFail: { count: 500 },
     },
   });
+  // Without a listener BullMQ dumps raw connection errors to stderr
+  queue.on('error', (err: Error) => {
+    console.error(`Queue ${name} error:`, err.message);
+  });
+  return queue;
 }
 
 // Typed worker factory
 export function createWorker<T>(name: string, processor: Processor<T>) {
-  return new Worker<T>(name, processor, {
+  const worker = new Worker<T>(name, processor, {
     connection: redisConnection,
     concurrency: 5,
   });
+  worker.on('error', (err: Error) => {
+    console.error(`Worker ${name} error:`, err.message);
+  });
+  return worker;
 }
 
 // Singleton queues
