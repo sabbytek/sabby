@@ -68,9 +68,9 @@ export async function createTenant(input: CreateTenantInput): Promise<CreateTena
     lastName: input.ownerLastName,
   });
 
-  // Seed default data (default location, chart of accounts)
+  // Seed default data (default location, chart of accounts, trial subscription)
   await withTenantSchema(schemaName, async (tenantDb) => {
-    const { locations, ledgerAccounts } = await import('../../shared/db/schema/tenant.js');
+    const { locations, ledgerAccounts, subscriptions } = await import('../../shared/db/schema/tenant.js');
     const { v4: uuid } = await import('uuid');
 
     await tenantDb.insert(locations).values({
@@ -96,6 +96,15 @@ export async function createTenant(input: CreateTenantInput): Promise<CreateTena
       { id: uuid(), code: '5200', name: 'Operating Expenses', type: 'expense', isSystem: true },
       { id: uuid(), code: '5300', name: 'Refunds', type: 'expense', isSystem: true },
     ]);
+
+    // Seed trial subscription so GET /v1/subscriptions works from day one.
+    // Trial has no period end — the UI shows a countdown only once a paid
+    // plan is activated and currentPeriodEnd is set.
+    await tenantDb.insert(subscriptions).values({
+      id: uuid(),
+      planTier: 'trial',
+      status: 'trial',
+    });
   });
 
   return { tenantId, slug, schemaName };
