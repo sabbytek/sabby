@@ -10,6 +10,7 @@ import {
   suspendTenantBodySchema,
   changePlanBodySchema,
   createTenantBodySchema,
+  extendTrialBodySchema,
 } from './validators.js';
 
 export default function platformTenantRoutes(app: FastifyInstance) {
@@ -109,6 +110,30 @@ export default function platformTenantRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const ctx = createPlatformContext(request);
       const result = await controller.reactivate(ctx, request.params.id, request.body.reason);
+      return sendSuccess(reply, result);
+    },
+  );
+
+  typed.post(
+    '/:id/extend-trial',
+    {
+      onRequest: platformGuard('tenants:change_plan'),
+      schema: {
+        tags: ['Platform · Tenants'],
+        summary: 'Extend a tenant trial period',
+        security: [{ bearerAuth: [] }],
+        params: tenantIdParamsSchema,
+        body: extendTrialBodySchema,
+      },
+    },
+    async (request, reply) => {
+      const ctx = createPlatformContext(request);
+      const result = await controller.extendTrial(
+        ctx,
+        request.params.id,
+        request.body.days,
+        request.body.reason,
+      );
       return sendSuccess(reply, result);
     },
   );

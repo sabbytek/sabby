@@ -50,7 +50,15 @@ export const changePlanBodySchema = z
   })
   .strict();
 
-export type ListTenantsQuery = z.infer<typeof listTenantsQuerySchema>;
+export const extendTrialBodySchema = z
+  .object({
+    days: z.coerce.number().int().min(1).max(365),
+    reason: reasonSchema,
+  })
+  .strict();
+
+export type ExtendTrialBody = z.infer<typeof extendTrialBodySchema>;
+
 export type TenantIdParams = z.infer<typeof tenantIdParamsSchema>;
 export type SuspendTenantBody = z.infer<typeof suspendTenantBodySchema>;
 export type ChangePlanBody = z.infer<typeof changePlanBodySchema>;

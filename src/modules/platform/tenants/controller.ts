@@ -76,6 +76,26 @@ export async function reactivate(ctx: PlatformContext, tenantId: string, reason:
   return { tenantId, isActive: true };
 }
 
+export async function extendTrial(
+  ctx: PlatformContext,
+  tenantId: string,
+  days: number,
+  reason: string,
+) {
+  const result = await service.extendTenantTrial(tenantId, days);
+
+  await writeAudit(ctx, {
+    action: 'tenant.extend_trial',
+    targetType: 'tenant',
+    targetId: tenantId,
+    tenantId,
+    reason,
+    metadata: { days, newExpiry: result.subscriptionExpiresAt },
+  });
+
+  return result;
+}
+
 export async function changePlan(
   ctx: PlatformContext,
   tenantId: string,

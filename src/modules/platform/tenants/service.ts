@@ -122,6 +122,26 @@ export async function reactivateTenant(tenantId: string) {
   return { tenantId, isActive: true, previousState: { isActive: false } };
 }
 
+export async function extendTenantTrial(tenantId: string, days: number) {
+  const tenant = await getTenant(tenantId);
+  if (tenant.subscriptionStatus !== 'trial') {
+    throw new ValidationError('Trial can only be extended for tenants on a trial subscription');
+  }
+
+  const base = tenant.subscriptionExpiresAt
+    ? new Date(tenant.subscriptionExpiresAt)
+    : new Date();
+  const newExpiry = new Date(base);
+  newExpiry.setDate(newExpiry.getDate() + days);
+
+  await db
+    .update(tenants)
+    .set({ subscriptionExpiresAt: newExpiry, updatedAt: new Date() })
+    .where(eq(tenants.id, tenantId));
+
+  return { tenantId, subscriptionExpiresAt: newExpiry.toISOString() };
+}
+
 /**
  * Change a tenant's plan tier. Returns the previous tier so the caller can
  * record a before/after diff in the audit log — a plan change is a billing
